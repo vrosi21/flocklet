@@ -1,7 +1,7 @@
 {
   "name": "flocklet",
   "productName": "Flocklet",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A floating flock of pets for your Claude Code desktop sessions: see what each agent does, answer questions and permissions, watch usage.",
   "author": "Flocklet",
   "homepage": "https://github.com/vrosi21/flocklet",
