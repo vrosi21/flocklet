@@ -65,7 +65,8 @@
       "createDesktopShortcut": false,
       "createStartMenuShortcut": true,
       "shortcutName": "Flocklet",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "differentialPackage": true
     },
     "publish": [
       {
