@@ -74,6 +74,9 @@
         "repo": "flocklet",
         "releaseType": "release"
       }
-    ]
+    ],
+    "releaseInfo": {
+      "releaseNotesFile": "RELEASE_NOTES.md"
+    }
   }
 }
