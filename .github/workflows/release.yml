@@ -1,0 +1,24 @@
+# Push a tag like v0.2.1 (npm version patch && git push --follow-tags):
+# tests run, the Windows installer is built and published to GitHub Releases,
+# and every installed Flocklet offers the update in its "Update ready" dialog.
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Build and publish the installer
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

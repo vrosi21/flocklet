@@ -1,0 +1,18 @@
+# dependencies and build output
+node_modules/
+dist/
+*.log
+
+# icons: only the committed app icon (scripts/brand.js makes it)
+build/*
+!build/flocklet.ico
+
+# private: never public
+# dev experiments: real hook payloads, tokens, settings backups
+spike/
+# local plan with session names and paths (the public overview is README.md)
+PLAN.md
+agentdeck-roadmap.json
+.claude/
+*.backup.*.json
+.env*

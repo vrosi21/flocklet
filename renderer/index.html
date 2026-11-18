@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en" data-palette="campfire" data-look="pocket" data-mode="dark">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'">
+  <title>Flocklet</title>
+  <link rel="stylesheet" href="fonts.css">
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Shell: deck (panel), sidebar rail and drawer; CSS orders them by the rail side. -->
+  <div id="shell" class="shell side-left">
+    <div id="drawer" class="drawer pane" hidden></div>
+    <nav id="rail" class="rail pane" aria-label="Sidebar"></nav>
+    <div id="panel" class="panel"></div>
+  </div>
+  <!-- Grab strips in the margin around the panel (the transparent window has no native resize border). -->
+  <div class="rz" data-edge="left" title="Drag to change width · double-click to reset"></div>
+  <div class="rz" data-edge="right" title="Drag to change width · double-click to reset"></div>
+  <div class="rz" data-edge="bottom" title="Drag to set the max height · double-click for auto"></div>
+  <div class="rz" data-edge="bottom-left" title="Drag to resize · double-click to reset"></div>
+  <div class="rz" data-edge="bottom-right" title="Drag to resize · double-click to reset"></div>
+  <script src="grouping.js"></script>
+  <script src="themes.js"></script>
+  <script src="pets.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,286 @@
+/* Flocklet design tokens
+ * Two independent layers, set on <html>:
+ *   data-palette = campfire | crimson-hour | midnight-plum | lagoon | concrete | marshmallow | phosphor
+ *   data-mode    = light | dark   (optional; omit = the palette's native mode)
+ *   data-look    = pocket | puff | shell | arcade | studio | tube
+ * Defaults (no attributes): Campfire dark + Pocket.
+ * The app always sets data-mode explicitly (resolved in main.js), so a palette's twin
+ * block wins when the mode differs from its native one.
+ * Palette ids, names and swatches are listed again in renderer/themes.js (keep in sync;
+ * test/themes.test.js checks every id has its blocks here).
+ * Fonts are bundled in renderer/fonts.css (offline, no network calls).
+ */
+
+/* =========================================================
+ * 0. MASCOT  (Puffball the chick; same in every palette except Phosphor,
+ *    which overrides these below — keep this block first so it can)
+ * ========================================================= */
+:root {
+  --chick-body: #ffd23f;
+  --chick-shade: #f5c400;   /* wings, tail */
+  --chick-belly: #ffe68a;
+  --chick-beak: #ff8c42;    /* beak, curl tuft, feet */
+  --chick-eye: #2a1f1a;
+  --chick-blush: #ff7eb6;   /* used at ~55% opacity */
+}
+
+/* =========================================================
+ * 1. PALETTES  (colour only)
+ * --g1..--g6 keep hue order: red, orange, yellow, green, blue, violet/pink
+ * so group colours stay recognisable across palettes. Pets use them too.
+ * ========================================================= */
+
+/* ---------- Campfire (native dark) — default ---------- */
+:root,
+[data-palette="campfire"] {
+  color-scheme: dark;
+  --bg: #17151a; --card: #221e25; --card-hi: #2b262f; --line: rgba(255, 240, 230, 0.08);
+  --text: #f3ede8; --muted: #a39aa4;
+  --accent: #ef7d52; --accent-ink: #17151a;
+  --warn: #f5b942; --ok: #63d68f; --err: #ef6464;
+  --g1: #ef6464; --g2: #ef7d52; --g3: #f5b942; --g4: #63d68f; --g5: #7fb8ff; --g6: #b48cff;
+}
+[data-palette="campfire"][data-mode="light"] {
+  color-scheme: light;
+  --bg: #faf5f1; --card: #ffffff; --card-hi: #fbede5; --line: rgba(60, 30, 20, 0.10);
+  --text: #2a2125; --muted: #7d6f74;
+  --accent: #d9622f; --accent-ink: #ffffff;
+  --warn: #c98a12; --ok: #2f9e62; --err: #d6434d;
+  --g1: #d6434d; --g2: #d9622f; --g3: #c98a12; --g4: #2f9e62; --g5: #3f86d9; --g6: #8a5fe0;
+}
+
+/* ---------- Crimson hour (native dark) ---------- */
+[data-palette="crimson-hour"] {
+  color-scheme: dark;
+  --bg: #1a1013; --card: #27161c; --card-hi: #331d25; --line: rgba(255, 220, 228, 0.08);
+  --text: #f7e9ec; --muted: #b89aa3;
+  --accent: #e8364f; --accent-ink: #ffffff;
+  --warn: #ffb547; --ok: #5fd39a; --err: #ff8a5c;
+  --g1: #e8364f; --g2: #ff8a5c; --g3: #ffb547; --g4: #5fd3c4; --g5: #7fb8ff; --g6: #b58cff;
+}
+[data-palette="crimson-hour"][data-mode="light"] {
+  color-scheme: light;
+  --bg: #fbf2f3; --card: #ffffff; --card-hi: #fbe3e7; --line: rgba(80, 10, 25, 0.10);
+  --text: #2b1419; --muted: #85636b;
+  --accent: #c81e3a; --accent-ink: #ffffff;
+  --warn: #c47f0f; --ok: #2a9a69; --err: #d9542a;
+  --g1: #c81e3a; --g2: #d9542a; --g3: #c47f0f; --g4: #1f9e8f; --g5: #3a7fd0; --g6: #8456d6;
+}
+
+/* ---------- Midnight plum (native dark) ---------- */
+[data-palette="midnight-plum"] {
+  color-scheme: dark;
+  --bg: #15111f; --card: #211a31; --card-hi: #2a223e; --line: rgba(230, 220, 255, 0.08);
+  --text: #efeaff; --muted: #a198c4;
+  --accent: #9d6bff; --accent-ink: #15111f;
+  --warn: #ffcc66; --ok: #6ee7b7; --err: #ff6b8a;
+  --g1: #ff6b8a; --g2: #ff9a6b; --g3: #ffcc66; --g4: #6ee7b7; --g5: #7fb8ff; --g6: #9d6bff;
+}
+[data-palette="midnight-plum"][data-mode="light"] {
+  color-scheme: light;
+  --bg: #f6f3fc; --card: #ffffff; --card-hi: #ece5fb; --line: rgba(40, 20, 90, 0.10);
+  --text: #221a38; --muted: #6f6690;
+  --accent: #7440e0; --accent-ink: #ffffff;
+  --warn: #c48a10; --ok: #1f9e74; --err: #d83c62;
+  --g1: #d83c62; --g2: #d96a33; --g3: #c48a10; --g4: #1f9e74; --g5: #3a7fd0; --g6: #7440e0;
+}
+
+/* ---------- Lagoon (native dark) ---------- */
+[data-palette="lagoon"] {
+  color-scheme: dark;
+  --bg: #0e1a1c; --card: #152629; --card-hi: #1c3236; --line: rgba(200, 255, 245, 0.08);
+  --text: #e4f5f3; --muted: #86a9a6;
+  --accent: #2ec4b6; --accent-ink: #0e1a1c;
+  --warn: #ffb85c; --ok: #9be36d; --err: #ff6b6b;
+  --g1: #ff6b6b; --g2: #ff8a73; --g3: #ffb85c; --g4: #9be36d; --g5: #2ec4b6; --g6: #c3a6ff;
+}
+[data-palette="lagoon"][data-mode="light"] {
+  color-scheme: light;
+  --bg: #f0f8f7; --card: #ffffff; --card-hi: #dff1ee; --line: rgba(10, 60, 60, 0.10);
+  --text: #0f2a2c; --muted: #5c7f7c;
+  --accent: #138f84; --accent-ink: #ffffff;
+  --warn: #c77a1a; --ok: #4c9a2a; --err: #d64545;
+  --g1: #d64545; --g2: #e0603f; --g3: #c77a1a; --g4: #4c9a2a; --g5: #138f84; --g6: #7d5fd6;
+}
+
+/* ---------- Concrete (native dark) — urban ---------- */
+[data-palette="concrete"] {
+  color-scheme: dark;
+  --bg: #18191b; --card: #232427; --card-hi: #2c2d31; --line: rgba(255, 255, 255, 0.08);
+  --text: #ececec; --muted: #9a9ca1;
+  --accent: #ffd23f; --accent-ink: #18191b;
+  --warn: #ff8c42; --ok: #4fd1a5; --err: #ff5555;
+  --g1: #ff5555; --g2: #ff8c42; --g3: #ffd23f; --g4: #4fd1a5; --g5: #3fc1ff; --g6: #ff5fa2;
+}
+[data-palette="concrete"][data-mode="light"] {
+  color-scheme: light;
+  --bg: #f2f2f0; --card: #ffffff; --card-hi: #e7e7e4; --line: rgba(0, 0, 0, 0.10);
+  --text: #1b1c1e; --muted: #6b6d72;
+  --accent: #c99a00; --accent-ink: #1b1c1e;
+  --warn: #d9661a; --ok: #1f9e76; --err: #d63a3a;
+  --g1: #d63a3a; --g2: #d9661a; --g3: #c99a00; --g4: #1f9e76; --g5: #1e8fd0; --g6: #d63f86;
+}
+
+/* ---------- Marshmallow (native LIGHT) ---------- */
+[data-palette="marshmallow"] {
+  color-scheme: light;
+  --bg: #fbf3ec; --card: #ffffff; --card-hi: #fff0e6; --line: rgba(80, 40, 30, 0.10);
+  --text: #3b2e3a; --muted: #8f7e8a;
+  --accent: #f2765e; --accent-ink: #3b2e3a;
+  --warn: #e09a1c; --ok: #3fbf82; --err: #e85a67;
+  --g1: #e85a67; --g2: #f2765e; --g3: #f2ad2e; --g4: #3fbf82; --g5: #8ec5ff; --g6: #c59bff;
+}
+[data-palette="marshmallow"][data-mode="dark"] {
+  color-scheme: dark;
+  --bg: #221b22; --card: #2d242d; --card-hi: #382c37; --line: rgba(255, 230, 240, 0.08);
+  --text: #fbefef; --muted: #b9a3b0;
+  --accent: #ff9a85; --accent-ink: #221b22;
+  --warn: #f7bf55; --ok: #6fd6a0; --err: #ff7a86;
+  --g1: #ff7a86; --g2: #ff9a85; --g3: #f7bf55; --g4: #6fd6a0; --g5: #9ccfff; --g6: #cfaaff;
+}
+
+/* ---------- Phosphor (native dark) — green CRT ---------- */
+[data-palette="phosphor"] {
+  color-scheme: dark;
+  --bg: #0a0f0b; --card: #0f1811; --card-hi: #15221a; --line: rgba(92, 255, 138, 0.12);
+  --text: #b8f5c4; --muted: #5f9a6b;
+  --accent: #5cff8a; --accent-ink: #0a0f0b;
+  --warn: #ffd35c; --ok: #9dffb5; --err: #ff6b5c;
+  --g1: #ff6b5c; --g2: #ff9a5c; --g3: #ffd35c; --g4: #5cff8a; --g5: #5ce1ff; --g6: #ff8ad8;
+  /* mascot goes mono green here */
+  --chick-body: #5cff8a; --chick-shade: #3fd86c; --chick-belly: #b8f5c4;
+  --chick-beak: #b8f5c4; --chick-eye: #0a0f0b; --chick-blush: #ff8ad8;
+}
+[data-palette="phosphor"][data-mode="light"] {
+  color-scheme: light;
+  --bg: #eef5ec; --card: #f8fcf6; --card-hi: #e0eedc; --line: rgba(10, 60, 20, 0.14);
+  --text: #0f3a1a; --muted: #4d7a58;
+  --accent: #138a3a; --accent-ink: #ffffff;
+  --warn: #a87a00; --ok: #1f9e4a; --err: #c8402f;
+  --g1: #c8402f; --g2: #c86a1e; --g3: #a87a00; --g4: #138a3a; --g5: #0f86a8; --g6: #b03a8f;
+  --chick-body: #138a3a; --chick-shade: #0f6e2e; --chick-belly: #8fd6a0;
+  --chick-beak: #8fd6a0; --chick-eye: #0a0f0b; --chick-blush: #b03a8f;
+}
+
+/* =========================================================
+ * 2. LOOKS  (font + corners + pattern; colour-free)
+ * Pattern is a mask: paint a layer with --pattern-ink and mask it with
+ * --pattern-mask, so every pattern recolours with the palette:
+ *   .panel::before { content:""; position:absolute; inset:0; pointer-events:none;
+ *     background: var(--pattern-ink);
+ *     -webkit-mask: var(--pattern-mask) 0 0 / var(--pattern-size); }
+ * ========================================================= */
+:root {
+  --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  --pattern-ink: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* ---------- Pocket (default) — pixel titles, soft body, dotted grid ---------- */
+:root,
+[data-look="pocket"] {
+  --font-title: "Pixelify Sans", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  --font-body: "Nunito", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --title-weight: 700; --title-scale: 1;
+  --radius: 6px; --radius-card: 6px; --radius-panel: 10px;
+  --density: 1;            /* multiplier for paddings */
+  --prefix: "";            /* text before titles/names */
+  --pattern-mask: radial-gradient(#000 1.2px, transparent 1.4px);
+  --pattern-size: 14px 14px;
+  --pattern-ink: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* ---------- Puff — bouncy, rounder, pixel checker ---------- */
+[data-look="puff"] {
+  --font-title: "Fredoka", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  --font-body: "Nunito", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --title-weight: 600; --title-scale: 1;
+  --radius: 10px; --radius-card: 10px; --radius-panel: 16px;
+  --density: 1.1;
+  --prefix: "";
+  --pattern-mask: conic-gradient(#000 25%, transparent 0 50%, #000 0 75%, transparent 0);
+  --pattern-size: 20px 20px;
+  --pattern-ink: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* ---------- Shell — all mono, terminal prompt, flock birds ---------- */
+[data-look="shell"] {
+  --font-title: var(--font-mono);
+  --font-body: var(--font-mono);
+  --title-weight: 700; --title-scale: 0.92;
+  --radius: 4px; --radius-card: 4px; --radius-panel: 6px;
+  --density: 0.9;
+  --prefix: "› ";
+  --pattern-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='44'%3E%3Cpath d='M8 14q4-5 8 0q4-5 8 0M34 34q3-4 6 0q3-4 6 0' stroke='%23000' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  --pattern-size: 56px 44px;
+  --pattern-ink: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* ---------- Arcade — retro caps titles, paper grain ---------- */
+[data-look="arcade"] {
+  --font-title: "Silkscreen", var(--font-mono);
+  --font-body: "Space Mono", var(--font-mono);
+  --title-weight: 400; --title-scale: 0.9;
+  --radius: 6px; --radius-card: 6px; --radius-panel: 10px;
+  --density: 1;
+  --prefix: "";
+  --pattern-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+  --pattern-size: 120px 120px;
+  --pattern-ink: color-mix(in srgb, var(--text) 18%, transparent);
+}
+
+/* ---------- Studio — modern, clean, no pattern ---------- */
+[data-look="studio"] {
+  --font-title: "Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  --font-body: "Inter", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --title-weight: 600; --title-scale: 1;
+  --radius: 6px; --radius-card: 6px; --radius-panel: 10px;
+  --density: 1;
+  --prefix: "";
+  --pattern-mask: none;
+  --pattern-size: auto;
+  --pattern-ink: transparent;
+}
+
+/* ---------- Tube — CRT shell, scanlines ---------- */
+[data-look="tube"] {
+  --font-title: "VT323", var(--font-mono);
+  --font-body: var(--font-mono);
+  --title-weight: 400; --title-scale: 1.35;   /* VT323 runs small */
+  --radius: 2px; --radius-card: 2px; --radius-panel: 4px;
+  --density: 0.9;
+  --prefix: "$ ";
+  --pattern-mask: repeating-linear-gradient(0deg, #000 0 1px, transparent 1px 4px);
+  --pattern-size: auto;
+  --pattern-ink: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+/* =========================================================
+ * 3. STATES + MOTION (shared)
+ * ========================================================= */
+:root {
+  --state-idle: var(--muted);
+  --state-thinking: var(--g5);
+  --state-working: var(--accent);
+  --state-waiting: var(--warn);
+  --state-done: var(--ok);
+  --state-error: var(--err);
+  --state-asleep: color-mix(in srgb, var(--muted) 60%, var(--bg));
+  --dur-fast: 120ms; --dur-base: 220ms; --dur-pet: 1600ms;
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* =========================================================
+ * 4. DERIVED SURFACES (computed from the palette, so light twins work)
+ * ========================================================= */
+:root {
+  --hover: color-mix(in srgb, var(--text) 7%, transparent);
+  --hover-2: color-mix(in srgb, var(--text) 13%, transparent);
+  --track: color-mix(in srgb, var(--text) 9%, transparent);
+  --scroll: color-mix(in srgb, var(--text) 14%, transparent);
+  --text-2: color-mix(in srgb, var(--text) 78%, var(--muted));
+  --field: color-mix(in srgb, var(--bg) 70%, var(--card));
+  --field-line: color-mix(in srgb, var(--text) 16%, transparent);
+  --sunken: color-mix(in srgb, var(--text) 7%, transparent);
+  --ink: #19191d;                      /* text on bright status fills */
+  --shadow: rgba(0, 0, 0, 0.35);
+}

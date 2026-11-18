@@ -1,0 +1,70 @@
+<!doctype html>
+<!-- Design preview: the real overlay (renderer/*) fed with fake sessions in every pet state.
+     Serve the project root (node design/preview-server.js) and open /design/preview.html
+     Optional: ?palette=lagoon&look=shell&mode=light&collapsed=0 -->
+<html lang="en" data-palette="campfire" data-look="pocket" data-mode="dark">
+<head>
+  <meta charset="utf-8">
+  <title>Flocklet preview</title>
+  <link rel="stylesheet" href="../renderer/fonts.css">
+  <link rel="stylesheet" href="../renderer/theme.css">
+  <link rel="stylesheet" href="../renderer/style.css">
+  <style>
+    html, body { overflow: auto; }
+    body { background: #6d6a75; padding: 12px; }
+    .panel { width: 352px; max-height: none; }
+  </style>
+</head>
+<body>
+  <div id="panel" class="panel"></div>
+  <script src="../renderer/grouping.js"></script>
+  <script src="../renderer/themes.js"></script>
+  <script src="../renderer/pets.js"></script>
+  <script>
+    (function () {
+      const T = window.FlockletThemes;
+      const q = new URLSearchParams(location.search);
+      const now = Date.now();
+      const base = (id, hue, extra) => ({
+        id, key: id, hostId: 'local_' + id, name: id, cwd: 'C:\\Projects\\AgentDeck', state: 'idle', group: 'active',
+        parentHostId: null, hue, canJump: true, pet: window.FlockletPets.defaultPet(hue), ...extra,
+      });
+      const cards = [
+        base('refactor-auth', 0, { state: 'working', activity: 'Editing login.ts', since: now - 140e3,
+          progress: { index: 3, total: 7, label: 'Wire the token check', ratio: 3 / 7 }, context: { tokens: 84e3, window: 200e3, pct: 42 } }),
+        base('flock-thinker', 1, { state: 'working', activity: 'Thinking…', since: now - 20e3 }),
+        base('docs-bot', 2, { state: 'waiting', since: now - 35e3, waiting: { id: 'r1', kind: 'permission', title: 'Run a shell command',
+          detail: 'npm test -- auth.spec.ts', actionable: true, suggestions: [{ index: 0, label: 'Always allow npm test' }] } }),
+        base('palette-quiz', 3, { state: 'waiting', since: now - 12e3, waiting: { id: 'r2', kind: 'question', title: 'Which palette?', actionable: true,
+          questions: [{ question: 'Which palette?', header: 'Palette', multiSelect: false,
+            options: [{ label: 'Campfire', description: 'warm coral' }, { label: 'Lagoon', description: 'teal + coral' }] }] } }),
+        base('tests-run', 4, { state: 'done', since: now - 300e3, lastMessage: 'All 45 tests pass. The tray chick is in.' }),
+        base('deploy-ghost', 7, { state: 'error', error: 'Stopped with an error' }),
+        base('idle-mochi', 5, { state: 'idle', since: now - 120e3, pinned: true }),
+        base('sleepy-chip', 6, { state: 'idle', since: now - 40 * 60e3, pinned: true }),
+      ];
+      let theme = T.normalizeTheme({ palette: q.get('palette'), look: q.get('look'), mode: q.get('mode') });
+      const ui = { muted: false, collapsed: q.get('collapsed') === '1', showIdle: false, groupBy: 'none', groups: [] };
+      let listener = null;
+      const emit = () => listener && listener({
+        cards, ui: { ...ui, theme, mode: T.resolveMode(theme, matchMedia('(prefers-color-scheme: dark)').matches) },
+        counts: { working: 2, waiting: 2, done: 1, idle: 2 }, hooks: { ok: true },
+        usage: { source: 'live', fiveHour: 42, weekly: 63, at: now - 60e3, fiveHourResetsAt: now + 2 * 3600e3, weeklyResetsAt: now + 3 * 86400e3 },
+      });
+      const noop = () => {};
+      window.agentdeck = {
+        onState: (cb) => { listener = cb; }, ready: () => setTimeout(emit, 0), resize: noop, jump: noop, hideCard: noop,
+        decide: noop, hide: noop, refreshUsage: noop, signIn: noop, pin: noop, group: noop, quiet: noop,
+        set: (patch) => {
+          if (patch.theme) theme = T.normalizeTheme({ ...theme, ...patch.theme });
+          for (const k of ['collapsed', 'showIdle', 'muted']) if (k in patch) ui[k] = patch[k];
+          if (patch.groupBy) ui.groupBy = patch.groupBy;
+          emit();
+        },
+        pet: (key, kind) => { const c = cards.find((x) => x.key === key); if (c) c.pet = kind; emit(); },
+      };
+    })();
+  </script>
+  <script src="../renderer/app.js"></script>
+</body>
+</html>
