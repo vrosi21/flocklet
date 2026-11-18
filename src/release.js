@@ -49,43 +49,54 @@ function plainNotes(notes) {
 }
 
 // Auto-update: check on start and every 6 h, download quietly, then ask "Restart now / Later".
-// "Later" installs when you quit Flocklet.
-function initUpdates({ app, dialog, log }) {
-  if (!isInstalled(app)) return { enabled: false, check() {} };
+// "Later" installs when you quit Flocklet. So it cannot be missed (a dialog without a parent opens behind the
+// always-on-top panel): the dialog is attached to the panel, a Windows notification says it too, and the tray
+// menu offers "Restart to update" until you do.
+function initUpdates({ app, dialog, log, getWindow = () => null, notify = () => {}, onReady = () => {} }) {
+  if (!isInstalled(app)) return { enabled: false, check() {}, ready: () => null, install() {} };
   const { autoUpdater } = require('electron-updater');
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.logger = { info: (m) => log('update', String(m)), warn: (m) => log('update warn', String(m)), error: (m) => log('update error', String(m)), debug() {} };
   let byHand = false;
   let asked = null;
+  let ready = null;
+  const install = () => setImmediate(() => autoUpdater.quitAndInstall(true, true));
+  const ask = (opts) => {
+    const w = getWindow();
+    return w && !w.isDestroyed() && w.isVisible() ? dialog.showMessageBox(w, opts) : dialog.showMessageBox(opts);
+  };
   autoUpdater.on('update-downloaded', async (info) => {
     if (asked === info.version) return;
     asked = info.version;
+    ready = info.version;
+    onReady(info.version);
+    notify(`Flocklet ${info.version} is ready`, 'Click to restart and update.', install);
     const notes = plainNotes(info.releaseNotes);
-    const { response } = await dialog.showMessageBox({
+    const { response } = await ask({
       type: 'info', title: 'Flocklet update', noLink: true, buttons: ['Restart now', 'Later'], defaultId: 0, cancelId: 1,
       message: `Flocklet ${info.version} is ready`,
       detail: `${notes ? `${notes}\n\n` : ''}Restart now to update. With "Later" it installs when you quit Flocklet.`,
     });
-    if (response === 0) setImmediate(() => autoUpdater.quitAndInstall(true, true));
+    if (response === 0) install();
   });
   autoUpdater.on('update-not-available', () => {
-    if (byHand) dialog.showMessageBox({ type: 'info', title: 'Flocklet', message: `Flocklet ${app.getVersion()} is up to date.`, buttons: ['OK'] });
+    if (byHand) ask({ type: 'info', title: 'Flocklet', message: `Flocklet ${app.getVersion()} is up to date.`, buttons: ['OK'] });
     byHand = false;
   });
   autoUpdater.on('update-available', (info) => {
-    if (byHand) dialog.showMessageBox({ type: 'info', title: 'Flocklet', message: `Downloading Flocklet ${info.version}…`, detail: 'You will be asked to restart when it is ready.', buttons: ['OK'] });
+    if (byHand) ask({ type: 'info', title: 'Flocklet', message: `Downloading Flocklet ${info.version}…`, detail: 'You will be asked to restart when it is ready.', buttons: ['OK'] });
     byHand = false;
   });
   autoUpdater.on('error', (e) => {
     log('update failed', e && e.message);
-    if (byHand) dialog.showMessageBox({ type: 'warning', title: 'Flocklet', message: 'Could not check for updates', detail: String(e && e.message).slice(0, 300), buttons: ['OK'] });
+    if (byHand) ask({ type: 'warning', title: 'Flocklet', message: 'Could not check for updates', detail: String(e && e.message).slice(0, 300), buttons: ['OK'] });
     byHand = false;
   });
   const check = (manual) => { byHand = !!manual; autoUpdater.checkForUpdates().catch(() => {}); };
   setTimeout(() => check(false), 15e3);
   setInterval(() => check(false), CHECK_EVERY_MS);
-  return { enabled: true, check: () => check(true) };
+  return { enabled: true, check: () => check(true), ready: () => ready, install };
 }
 
 module.exports = { isInstalled, APP_ID, DEV_AUMID, settingsDir, migrateSettings, initStartup, setStartup, plainNotes, initUpdates };

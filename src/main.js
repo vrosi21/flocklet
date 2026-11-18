@@ -27,7 +27,7 @@ app.setPath('userData', Release.settingsDir(app.getPath('appData')));
 Release.migrateSettings(app.getPath('appData'));
 const INSTALLED = Release.isInstalled(app);
 const AUMID = INSTALLED ? Release.APP_ID : Release.DEV_AUMID;
-let updates = { enabled: false, check() {} };
+let updates = { enabled: false, check() {}, ready: () => null, install() {} };
 
 const PORT = 4777;
 const PanelSize = require('./panelSize');
@@ -357,7 +357,9 @@ function updateTray() {
 
 function rebuildTrayMenu() {
   if (!tray) return;
+  const pending = updates.ready();
   tray.setContextMenu(Menu.buildFromTemplate([
+    ...(pending ? [{ label: `Restart to update to ${pending}`, click: () => updates.install() }, { type: 'separator' }] : []),
     { label: win && win.isVisible() ? 'Minimise to tray' : 'Restore Flocklet', accelerator: HOTKEY, registerAccelerator: false, click: toggleWindow },
     { label: 'View', submenu: [
       { label: 'Panel', type: 'radio', checked: !!cfg && !cfg.dock && !cfg.collapsed, click: () => setView({ dock: false, collapsed: false }) },
@@ -707,7 +709,16 @@ if (!app.requestSingleInstanceLock()) {
     setTimeout(() => refreshContext(), 2000);
     ensureStartMenuShortcut();
     registerToastIdentity();
-    updates = Release.initUpdates({ app, dialog, log }); // installed app: "Update ready" dialog
+    updates = Release.initUpdates({ // installed app: "Update ready" dialog + notification + tray item
+      app, dialog, log, getWindow: () => win, onReady: () => rebuildTrayMenu(),
+      notify: (title, body, onClick) => {
+        if (!Notification.isSupported()) return;
+        const t = new Notification({ title, body, icon: chickIcon(null, 64) });
+        t.on('click', onClick);
+        toasts.add(t);
+        t.show();
+      },
+    });
     rebuildTrayMenu();
     if (process.env.AGENTDECK_TEST_TOAST) {
       setTimeout(() => showToast({ kind: 'test', title: 'Flocklet test', body: 'If you can read this, notifications work.' }), 3000);
