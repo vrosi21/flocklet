@@ -171,7 +171,10 @@ function miniBar(cards, usage) {
   return h('div', { class: 'minibar', onclick: expand },
     h('div', { class: 'chips' }, chips.length ? chips : h('span', { class: 'chip idle' }, 'no sessions')),
     showUsage && h('div', { class: `mmeters${usage.stale ? ' stale' : ''}` },
-      mm('5h', usage.fiveHour, usage.fiveHourResetsAt), mm('wk', usage.weekly, null)));
+      mm('5h', usage.fiveHour, usage.fiveHourResetsAt), mm('wk', usage.weekly, null)),
+    showUsage && h('button', { // same refresh as the panel's ↻ (10 s floor in main)
+      class: `ib small mrefresh${Date.now() < refreshSpinUntil ? ' spin' : ''}`, title: 'Refresh usage now', 'aria-label': 'Refresh usage now',
+      onclick: (e) => { e.stopPropagation(); refreshSpinUntil = Date.now() + 1500; api.refreshUsage(); render(); } }, icon('refresh')));
 }
 
 // Stretched minimised bar: deck sessions as one-line rows, urgent first. Click a row to jump in.

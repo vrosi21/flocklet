@@ -1,2 +1,2 @@
-- Fix: a copy run from source no longer acts like the installed app (it tried to update itself and to start with Windows).
-- The update dialog now shows these release notes.
+- Minimised bar: refresh button for usage, and the bar is now as tall as the sidebar beside it.
+- Updates can no longer be missed: the "ready" dialog shows above the panel, plus a Windows notification and a "Restart to update" item in the tray menu.

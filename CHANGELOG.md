@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- Minimised bar: usage refresh button; as tall as the sidebar beside it.
+- Update ready: dialog above the panel, Windows notification, tray "Restart to update".
+
 ## 0.2.1
 
 - Fix: a copy run from source no longer acts like the installed app (update check, start with Windows).

@@ -719,3 +719,11 @@ button.mini.pickable:hover { outline: 2px solid color-mix(in srgb, var(--pc) 55%
   background: var(--hover-2); color: var(--text); font-size: 9.5px; font-weight: 800; line-height: 16px; text-align: center; }
 .dend { display: flex; align-items: flex-end; gap: 2px; margin-bottom: 6px; }
 .dend .dlogo { margin-bottom: 0; }
+
+/* ---------- minimised bar: refresh + as tall as the sidebar beside it ---------- */
+.minibar .mrefresh { flex: none; width: 22px; height: 22px; align-self: center; }
+/* beside a full left/right sidebar the window is the sidebar's height (RAIL_MIN_H): the bar fills it too */
+/* (stats-only mode; with the session list on, the bar is taller than the sidebar anyway). A min-height, not a
+   stretch: a stretched bar would measure as tall as the window, and the window could never shrink back. */
+.shell.minimised:not(.railmin).side-left > .panel:has(> .minilist.off),
+.shell.minimised:not(.railmin).side-right > .panel:has(> .minilist.off) { min-height: 92px; justify-content: space-between; } /* RAIL_MIN_H 108 - 16 */
