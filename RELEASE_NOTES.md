@@ -1,0 +1,2 @@
+- Fix: a copy run from source no longer acts like the installed app (it tried to update itself and to start with Windows).
+- The update dialog now shows these release notes.

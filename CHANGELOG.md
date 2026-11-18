@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- Fix: a copy run from source no longer acts like the installed app (update check, start with Windows).
+- The update dialog shows release notes (`RELEASE_NOTES.md`).
+
 ## 0.2.0 — first public release
 
 - Installer (per-user, no admin), starts with Windows, in-app "Update ready" dialog.

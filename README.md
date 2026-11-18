@@ -50,6 +50,7 @@ npm run dist       # build the installer into dist/
 ## Releasing
 
 ```bash
+# 1. write what changed into RELEASE_NOTES.md (and CHANGELOG.md)
 npm version patch     # or minor; makes the commit and the tag
 git push --follow-tags
 ```

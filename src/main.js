@@ -25,7 +25,8 @@ const Release = require('./release');
 // Settings folder first: everything below (log, config, single-instance lock) uses it.
 app.setPath('userData', Release.settingsDir(app.getPath('appData')));
 Release.migrateSettings(app.getPath('appData'));
-const AUMID = app.isPackaged ? Release.APP_ID : Release.DEV_AUMID;
+const INSTALLED = Release.isInstalled(app);
+const AUMID = INSTALLED ? Release.APP_ID : Release.DEV_AUMID;
 let updates = { enabled: false, check() {} };
 
 const PORT = 4777;
@@ -154,7 +155,7 @@ function pushState() {
     if (win && !win.isDestroyed()) {
       win.webContents.send('state', {
         ...snap,
-        ui: { muted: cfg.muted, collapsed: cfg.collapsed, showIdle: cfg.showIdle, rail: cfg.rail, drawer: cfg.drawer, notify: cfg.notify, dock: cfg.dock, startup: app.isPackaged ? cfg.startup : null,
+        ui: { muted: cfg.muted, collapsed: cfg.collapsed, showIdle: cfg.showIdle, rail: cfg.rail, drawer: cfg.drawer, notify: cfg.notify, dock: cfg.dock, startup: INSTALLED ? cfg.startup : null,
           version: app.getVersion(), updates: updates.enabled, railMin: cfg.railMin, dockNames: cfg.dockNames, width: cfg.width, deckHeight: cfg.collapsed ? null : cfg.maxHeight, groupBy: cfg.groupBy, groups: cfg.groups, folded: cfg.folded, miniList: cfg.miniList || miniDragging, fixedHeight: cfg.dock ? false : cfg.collapsed ? miniDragging : cfg.maxHeight != null,
           theme: cfg.theme, mode: Themes.resolveMode(cfg.theme, nativeTheme.shouldUseDarkColors) },
         hooks,
@@ -198,7 +199,7 @@ function showToast(n) {
 // The installer makes that shortcut for the installed app; a copy run from source makes its own,
 // "Flocklet (dev)", so the two never fight over one shortcut. Its file name is the toast sender name.
 function ensureStartMenuShortcut() {
-  if (process.platform !== 'win32' || app.isPackaged) return;
+  if (process.platform !== 'win32' || INSTALLED) return;
   const dir = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs');
   const lnk = path.join(dir, 'Flocklet (dev).lnk');
   // Prefer the branded copy of electron.exe (made by `npm run brand`): it carries the chick icon and
@@ -371,11 +372,11 @@ function rebuildTrayMenu() {
     { label: 'Sign in to Claude Code (live usage)', click: openSignIn, visible: !!live && live.status === 'signin' },
     { type: 'separator' },
     { label: 'Theme', submenu: themeMenu() },
-    { label: 'Start with Windows', type: 'checkbox', checked: !!(cfg && cfg.startup), enabled: app.isPackaged,
+    { label: 'Start with Windows', type: 'checkbox', checked: !!(cfg && cfg.startup), enabled: INSTALLED,
       click: (mi) => { Release.setStartup(app, cfg, mi.checked); saveConfig(); pushState(); } },
     { label: 'Check for updates', click: () => updates.check(), visible: updates.enabled },
     { type: 'separator' },
-    { label: `Flocklet ${app.getVersion()}${app.isPackaged ? '' : ' (from source)'}`, enabled: false },
+    { label: `Flocklet ${app.getVersion()}${INSTALLED ? '' : ' (from source)'}`, enabled: false },
     { label: 'Quit Flocklet', click: () => app.quit() },
   ]));
 }

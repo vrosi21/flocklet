@@ -8,6 +8,11 @@ const APP_ID = 'com.flocklet.app'; // installed build: AppUserModelID = electron
 const DEV_AUMID = 'AgentDeck'; // run from source: keeps the Windows notification settings it already has
 const CHECK_EVERY_MS = 6 * 3600e3;
 
+// Installed = built by electron-builder. Not enough: app.isPackaged only looks at the exe's file name, and the
+// source copy runs a renamed electron.exe (Flocklet.exe, see scripts/brand.js). Electron sets defaultApp
+// when it was started with a folder to run (electron.exe <folder>), which only the source copy does.
+const isInstalled = (app, proc = process) => !!app.isPackaged && !proc.defaultApp;
+
 // Settings live in %APPDATA%\Flocklet for both builds (so they never run twice: the single-instance lock
 // is per settings folder). Builds before 0.2.0 used %APPDATA%\agentdeck: our own files are copied once.
 const settingsDir = (appData) => path.join(appData, 'Flocklet');
@@ -25,12 +30,12 @@ function migrateSettings(appData) {
 
 // Start with Windows: on by default the first time the installed app runs; your switch after that.
 function initStartup(app, cfg, save) {
-  if (!app.isPackaged) return;
+  if (!isInstalled(app)) return;
   if (typeof cfg.startup !== 'boolean') { cfg.startup = true; save(); }
   app.setLoginItemSettings({ openAtLogin: cfg.startup });
 }
 function setStartup(app, cfg, on) {
-  if (!app.isPackaged) return;
+  if (!isInstalled(app)) return;
   cfg.startup = !!on;
   app.setLoginItemSettings({ openAtLogin: cfg.startup });
 }
@@ -46,7 +51,7 @@ function plainNotes(notes) {
 // Auto-update: check on start and every 6 h, download quietly, then ask "Restart now / Later".
 // "Later" installs when you quit Flocklet.
 function initUpdates({ app, dialog, log }) {
-  if (!app.isPackaged) return { enabled: false, check() {} };
+  if (!isInstalled(app)) return { enabled: false, check() {} };
   const { autoUpdater } = require('electron-updater');
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -83,4 +88,4 @@ function initUpdates({ app, dialog, log }) {
   return { enabled: true, check: () => check(true) };
 }
 
-module.exports = { APP_ID, DEV_AUMID, settingsDir, migrateSettings, initStartup, setStartup, plainNotes, initUpdates };
+module.exports = { isInstalled, APP_ID, DEV_AUMID, settingsDir, migrateSettings, initStartup, setStartup, plainNotes, initUpdates };

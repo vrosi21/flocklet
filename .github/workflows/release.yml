@@ -1,6 +1,7 @@
 # Push a tag like v0.2.1 (npm version patch && git push --follow-tags):
 # tests run, the Windows installer is built and published to GitHub Releases,
 # and every installed Flocklet offers the update in its "Update ready" dialog.
+# Write what changed into RELEASE_NOTES.md first: it becomes the release text and the dialog's notes.
 name: Release
 on:
   push:
@@ -19,6 +20,6 @@ jobs:
       - run: npm ci
       - run: npm test
       - name: Build and publish the installer
-        run: npx electron-builder --win --publish always
+        run: npx electron-builder --win --publish always -c.releaseInfo.releaseNotesFile=RELEASE_NOTES.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -42,3 +42,9 @@ test('release notes become short plain text', () => {
   assert.equal(R.plainNotes([{ note: 'a' }, { note: 'b' }]), 'a\nb');
   assert.equal(R.plainNotes(null), '');
 });
+
+test('a source copy run by a renamed electron.exe is not "installed"', () => {
+  assert.equal(R.isInstalled({ isPackaged: true }, {}), true, 'installer build');
+  assert.equal(R.isInstalled({ isPackaged: true }, { defaultApp: true }), false, 'Flocklet.exe <folder> (scripts/brand.js)');
+  assert.equal(R.isInstalled({ isPackaged: false }, {}), false, 'electron.exe <folder>');
+});
