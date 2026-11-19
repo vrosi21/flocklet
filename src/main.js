@@ -4,16 +4,15 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { spawn, execFile } = require('child_process');
+const { execFile } = require('child_process');
 const { SessionStore } = require('./store');
 const { watchRegistry } = require('./registry');
 const { startHookServer } = require('./hookServer');
 const { installHooks, uninstallHooks } = require('./hooksConfig');
 const { Broker } = require('./broker');
 const { buildDecision } = require('./decisions');
-const { watchUsage } = require('./usage');
+const { watchUsage, readUsage, findProfileDir } = require('./usage');
 const { watchDesktopSessions } = require('./desktopSessions');
-const { LiveUsage } = require('./liveUsage');
 const Grouping = require('../renderer/grouping');
 const Themes = require('../renderer/themes');
 const Pets = require('../renderer/pets');
@@ -48,10 +47,7 @@ let server = null;
 let stopRegistry = null;
 let stopUsage = null;
 let stopDesktop = null;
-let usage = null;       // from Claude desktop's history file
-let live = null;        // straight from Anthropic with the Claude Code login
-const LIVE_FRESH_MS = 20 * 60e3;
-const USAGE_EVENTS = new Set(['UserPromptSubmit', 'PermissionRequest', 'Notification', 'Stop', 'StopFailure']);
+let usage = null;       // from Claude desktop's own usage history file; Flocklet never calls Anthropic
 let hooks = { ok: false, error: 'starting' };
 let quitting = false;
 let cleanedUp = false;
@@ -258,22 +254,9 @@ function refreshContext(onlyId) {
   }
 }
 
-// Live reading when it is fresh, otherwise Claude desktop's own reading.
+// Claude desktop's own reading of its local usage history file. No login, no network.
 function currentUsage() {
-  const l = live && live.usage;
-  const liveStatus = live ? live.status : 'idle';
-  if (l && Date.now() - l.at < LIVE_FRESH_MS) return { ...l, liveStatus };
-  if (usage) return { ...usage, source: 'claude-app', liveStatus };
-  if (l) return { ...l, stale: true, liveStatus };
-  return liveStatus === 'signin' ? { source: 'none', liveStatus } : null;
-}
-
-// One-time Claude Code sign-in in its own console window (needed for live usage).
-function openSignIn() {
-  try {
-    spawn('cmd.exe', ['/c', 'start "Claude Code sign-in" cmd /k claude auth login'],
-      { detached: true, stdio: 'ignore', windowsVerbatimArguments: true }).unref();
-  } catch (e) { log('sign-in launch failed', e.message); }
+  return usage ? { ...usage, source: 'claude-app' } : null;
 }
 
 let captureTimer = null;
@@ -371,7 +354,6 @@ function rebuildTrayMenu() {
     { label: 'Notifications', type: 'checkbox', checked: !!(cfg && cfg.notify),
       click: (mi) => { cfg.notify = mi.checked; saveConfig(); } },
     { label: 'Reconnect to Claude Code', click: ensureHooks, enabled: !!server },
-    { label: 'Sign in to Claude Code (live usage)', click: openSignIn, visible: !!live && live.status === 'signin' },
     { type: 'separator' },
     { label: 'Theme', submenu: themeMenu() },
     { label: 'Start with Windows', type: 'checkbox', checked: !!(cfg && cfg.startup), enabled: INSTALLED,
@@ -637,8 +619,8 @@ ipcMain.on('ui:quiet', (_e, key, on) => {
   saveConfig();
   pushState();
 });
-ipcMain.on('ui:refreshUsage', () => { if (live) live.request('button'); });
-ipcMain.on('ui:signIn', () => openSignIn());
+// ↻ re-reads Claude's local usage history file at once. It never calls Anthropic.
+ipcMain.on('ui:refreshUsage', () => { usage = readUsage(findProfileDir()); pushState(); });
 ipcMain.on('ui:checkUpdates', () => updates.check());
 
 // ---------- lifecycle ----------
@@ -670,11 +652,9 @@ if (!app.requestSingleInstanceLock()) {
         onEvent: (ev, reply) => {
           if (ev.hook_event_name === 'PermissionRequest' && ev.session_id) {
             store.applyHook(ev, { requestId: broker.hold(ev, reply) });
-            if (live) live.request('event');
             return true; // answered later from the panel, or released when Claude moves on
           }
           store.applyHook(ev);
-          if (live && USAGE_EVENTS.has(ev.hook_event_name)) live.request('event');
           if (ev.hook_event_name === 'Stop' || ev.hook_event_name === 'PostToolUse') setTimeout(() => refreshContext(ev.session_id), 300);
           return false;
         },
@@ -694,16 +674,6 @@ if (!app.requestSingleInstanceLock()) {
     stopDesktop = watchDesktopSessions((list) => store.applyDesktop(list));
     if (!globalShortcut.register(HOTKEY, toggleWindow)) console.warn(`hotkey ${HOTKEY} unavailable`);
     nativeTheme.on('updated', () => { if (cfg.theme.mode === 'windows') pushState(); });
-    live = new LiveUsage({
-      onUpdate: (status) => { if (status === 'signin' || status === 'ok') rebuildTrayMenu(); pushState(); },
-      log,
-    });
-    live.request('timer');
-    setInterval(() => {
-      // Busy: every 5 min. Quiet: every 15 min. Events and the button come on top (max once a minute).
-      const every = lastCounts.working + lastCounts.waiting > 0 ? 5 * 60e3 : 15 * 60e3;
-      if (Date.now() - live.lastTryAt >= every) live.request('timer');
-    }, 30e3);
     setInterval(pushState, 30e3); // re-ages readings and timers
     setInterval(() => refreshContext(), 15e3);
     setTimeout(() => refreshContext(), 2000);

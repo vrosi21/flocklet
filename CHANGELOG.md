@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- Usage meters read Claude desktop's local usage file only. Flocklet no longer reads, refreshes or
+  sends your Claude Code login, and never contacts Anthropic — the only network traffic is the
+  GitHub update check.
+- The Claude Code sign-in prompt is gone (nothing needs it). Reset times are no longer shown:
+  the local usage file does not carry them.
+
 ## 0.2.2
 
 - Minimised bar: usage refresh button; as tall as the sidebar beside it.

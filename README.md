@@ -7,7 +7,7 @@ that shows what its agent is doing, so you can keep working elsewhere and still 
   (like Claude's sidebar), with parent and child sessions nested.
 - **Answer from the panel**: permission requests (Allow / Always / Deny) and multiple-choice questions,
   without switching windows. One click jumps into the session in Claude.
-- **Usage meters**: your 5-hour and weekly limits with reset times.
+- **Usage meters**: your 5-hour and weekly limits, read from Claude's own local usage file.
 - **Three views**: the full panel with a dockable sidebar, a minimised stats bar, or a **pet dock** (a slim
   taskbar of pets with speech bubbles: `?` question, `!` permission, `✓` done).
 - **Notifications** when a session finishes or needs you; per-session mute.
@@ -31,8 +31,8 @@ Everything stays on your computer.
 - On start, Flocklet adds HTTP hooks to `~/.claude/settings.json` (a backup is made first) that send
   session events to `127.0.0.1:4777` with a random token; on quit it removes them again.
 - It reads Claude's local session files to list your sessions and their parent/child links.
-- Live usage: it asks Anthropic's usage endpoint with your existing Claude Code login, the same request
-  Claude Code's `/usage` makes. It never sends your data anywhere else.
+- Usage meters read Claude desktop's local usage history file. Flocklet never reads your Claude login
+  and never contacts Anthropic; its only network traffic is the GitHub update check.
 - Answers you give in the panel go back only to the waiting Claude Code session.
 
 Flocklet is an independent project. It is not made by, affiliated with or endorsed by Anthropic.

@@ -49,12 +49,12 @@
       const emit = () => listener && listener({
         cards, ui: { ...ui, theme, mode: T.resolveMode(theme, matchMedia('(prefers-color-scheme: dark)').matches) },
         counts: { working: 2, waiting: 2, done: 1, idle: 2 }, hooks: { ok: true },
-        usage: { source: 'live', fiveHour: 42, weekly: 63, at: now - 60e3, fiveHourResetsAt: now + 2 * 3600e3, weeklyResetsAt: now + 3 * 86400e3 },
+        usage: { source: 'claude-app', fiveHour: 42, weekly: 63, at: now - 60e3, stale: false, autoRefreshOn: true, autoRefreshUntil: now + 20 * 3600e3 },
       });
       const noop = () => {};
       window.agentdeck = {
         onState: (cb) => { listener = cb; }, ready: () => setTimeout(emit, 0), resize: noop, jump: noop, hideCard: noop,
-        decide: noop, hide: noop, refreshUsage: noop, signIn: noop, pin: noop, group: noop, quiet: noop,
+        decide: noop, hide: noop, refreshUsage: noop, pin: noop, group: noop, quiet: noop,
         set: (patch) => {
           if (patch.theme) theme = T.normalizeTheme({ ...theme, ...patch.theme });
           for (const k of ['collapsed', 'showIdle', 'muted']) if (k in patch) ui[k] = patch[k];

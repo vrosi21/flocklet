@@ -16,7 +16,6 @@ contextBridge.exposeInMainWorld('agentdeck', {
   fold: (key, folded) => ipcRenderer.send('ui:fold', String(key), folded === true),
   hide: () => ipcRenderer.send('ui:hide'),
   refreshUsage: () => ipcRenderer.send('ui:refreshUsage'),
-  signIn: () => ipcRenderer.send('ui:signIn'),
   pin: (key, on) => ipcRenderer.send('ui:pin', key, on),
   group: (op) => ipcRenderer.send('ui:group', op),
   quiet: (key, on) => ipcRenderer.send('ui:quiet', key, on),

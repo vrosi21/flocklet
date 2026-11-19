@@ -91,43 +91,19 @@ function meter(label, v, title) {
 
 const clock = (ts) => new Date(ts).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
-function dur(ms) {
-  const m = Math.max(0, Math.round(ms / 60e3));
-  if (m < 60) return `${m}m`;
-  const hr = Math.floor(m / 60);
-  if (hr < 24) return `${hr}h ${m % 60}m`;
-  return `${Math.floor(hr / 24)}d ${hr % 24}h`;
-}
-const countdown = (ts) => h('span', { class: 'countdown', 'data-until': ts }, dur(ts - Date.now()));
-
 let refreshSpinUntil = 0;
 function usageRow(u) {
-  const live = u.source === 'live';
-  const tip = live ? 'Live from Anthropic with your Claude Code login.'
-    : u.autoRefreshOn ? `From the Claude app, refreshed every 5-15 min until ${clock(u.autoRefreshUntil)}.`
-      : 'From the Claude app. It only refreshes for 24 h after you right-click its tray icon.';
+  const tip = u.autoRefreshOn ? `From the Claude app, refreshed every 5-15 min until ${clock(u.autoRefreshUntil)}.`
+    : 'From the Claude app. It only refreshes for 24 h after you right-click its tray icon.';
   const refresh = h('button', {
     class: `ib small${Date.now() < refreshSpinUntil ? ' spin' : ''}`, title: 'Refresh usage now', 'aria-label': 'Refresh usage now',
     onclick: (e) => { e.stopPropagation(); refreshSpinUntil = Date.now() + 1500; api.refreshUsage(); render(); },
   }, icon('refresh'));
-  const meters = u.source === 'none' ? null : h('div', { class: 'meters' },
+  const meters = h('div', { class: 'meters' },
     meter('5h', u.fiveHour, u.fiveHour == null ? 'No reading inside the current 5-hour window' : '5-hour limit'),
     meter('Week', u.weekly, 'Weekly limit, all models'),
     refresh);
-  let info = null;
-  if (live) {
-    info = h('div', { class: 'uinfo' },
-      u.fiveHourResetsAt && ['5h resets in ', countdown(u.fiveHourResetsAt)],
-      u.weeklyResetsAt && [u.fiveHourResetsAt ? ' · ' : '', `week ${clock(u.weeklyResetsAt)}`],
-      ' · ', timer(u.at), ' ago');
-  } else if (u.liveStatus === 'signin') {
-    info = h('div', { class: 'unudge' }, 'Live usage needs a one-time Claude Code sign-in',
-      h('button', { class: 'pill', onclick: (e) => { e.stopPropagation(); api.signIn(); } }, 'Sign in'));
-  } else if (u.liveStatus === 'error') {
-    info = h('div', { class: 'unudge' }, 'Live usage unavailable right now · Claude app reading from ', timer(u.at), ' ago');
-  } else if (u.stale) {
-    info = h('div', { class: 'unudge' }, 'Reading from ', timer(u.at), ' ago');
-  }
+  const info = u.stale ? h('div', { class: 'unudge' }, 'Reading from ', timer(u.at), ' ago') : null;
   return h('div', { class: `usage${u.stale ? ' stale' : ''}`, title: tip }, meters, info);
 }
 
@@ -158,21 +134,20 @@ function miniBar(cards, usage) {
   const chips = G.STATE_ORDER.filter((k) => n[k]).map((k) =>
     h('button', { class: `chip ${k}`, title: `${n[k]} ${k === 'waiting' ? 'waiting for you' : k}. Click to expand`, onclick: expand },
       h('b', null, String(n[k])), ` ${k === 'waiting' && n[k] === 1 ? 'needs you' : CHIP_WORD[k]}`));
-  const mm = (label, v, resetAt) => {
+  const mm = (label, v) => {
     if (v == null) return null;
     const level = v >= 90 ? 'hot' : v >= 70 ? 'warm' : '';
-    return h('div', { class: `mmeter ${level}`, title: `${label === '5h' ? '5-hour' : 'Weekly'} limit: ${v}%${resetAt ? `, resets in ${dur(resetAt - Date.now())}` : ''}` },
+    return h('div', { class: `mmeter ${level}`, title: `${label === '5h' ? '5-hour' : 'Weekly'} limit: ${v}%` },
       h('span', { class: 'mlabel' }, label),
       h('span', { class: 'bar' }, h('i', { style: `--p:${v / 100}` })),
-      h('span', { class: 'mval' }, `${v}%`),
-      label === '5h' && resetAt && h('span', { class: 'mreset' }, countdown(resetAt)));
+      h('span', { class: 'mval' }, `${v}%`));
   };
   const showUsage = usage && usage.source !== 'none';
   return h('div', { class: 'minibar', onclick: expand },
     h('div', { class: 'chips' }, chips.length ? chips : h('span', { class: 'chip idle' }, 'no sessions')),
     showUsage && h('div', { class: `mmeters${usage.stale ? ' stale' : ''}` },
-      mm('5h', usage.fiveHour, usage.fiveHourResetsAt), mm('wk', usage.weekly, null)),
-    showUsage && h('button', { // same refresh as the panel's ↻ (10 s floor in main)
+      mm('5h', usage.fiveHour), mm('wk', usage.weekly)),
+    showUsage && h('button', { // same refresh as the panel's ↻ (re-reads Claude's usage file)
       class: `ib small mrefresh${Date.now() < refreshSpinUntil ? ' spin' : ''}`, title: 'Refresh usage now', 'aria-label': 'Refresh usage now',
       onclick: (e) => { e.stopPropagation(); refreshSpinUntil = Date.now() + 1500; api.refreshUsage(); render(); } }, icon('refresh')));
 }
@@ -930,9 +905,6 @@ api.onState((s) => {
   scheduleRender();
 });
 setInterval(() => {
-  for (const el of document.querySelectorAll('.countdown[data-until]')) {
-    el.textContent = dur(Number(el.dataset.until) - Date.now());
-  }
   for (const el of document.querySelectorAll('.timer[data-since]')) {
     el.textContent = (el.dataset.prefix || '') + ago(Number(el.dataset.since));
   }

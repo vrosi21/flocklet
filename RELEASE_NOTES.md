@@ -1,2 +1,2 @@
-- Minimised bar: refresh button for usage, and the bar is now as tall as the sidebar beside it.
-- Updates can no longer be missed: the "ready" dialog shows above the panel, plus a Windows notification and a "Restart to update" item in the tray menu.
+- Usage now comes only from Claude desktop's local usage file: Flocklet no longer touches your Claude Code login and never contacts Anthropic. The only network traffic is the GitHub update check.
+- The sign-in prompt is gone; reset times are no longer shown (the local file does not carry them).
