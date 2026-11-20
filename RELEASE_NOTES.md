@@ -1,2 +1,1 @@
-- Usage now comes only from Claude desktop's local usage file: Flocklet no longer touches your Claude Code login and never contacts Anthropic. The only network traffic is the GitHub update check.
-- The sign-in prompt is gone; reset times are no longer shown (the local file does not carry them).
+- When the usage reading is old, the panel now says how to get a fresh one: right-click the Claude tray icon (Claude then refreshes its usage for 24 hours).

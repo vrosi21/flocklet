@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Old usage reading: the panel and minimised bar say how to refresh it (right-click the Claude tray icon).
+
 ## 0.3.0
 
 - Usage meters read Claude desktop's local usage file only. Flocklet no longer reads, refreshes or

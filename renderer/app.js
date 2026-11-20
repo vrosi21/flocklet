@@ -103,7 +103,10 @@ function usageRow(u) {
     meter('5h', u.fiveHour, u.fiveHour == null ? 'No reading inside the current 5-hour window' : '5-hour limit'),
     meter('Week', u.weekly, 'Weekly limit, all models'),
     refresh);
-  const info = u.stale ? h('div', { class: 'unudge' }, 'Reading from ', timer(u.at), ' ago') : null;
+  // Claude desktop only writes new readings while its own poller runs (24 h after a right-click on its tray icon).
+  // An old reading says so, and how to get a new one.
+  const info = u.stale ? h('div', { class: 'unudge' }, 'Reading from ', timer(u.at), ' ago',
+    !u.autoRefreshOn && h('span', { class: 'muted' }, ' · right-click the Claude tray icon to refresh')) : null;
   return h('div', { class: `usage${u.stale ? ' stale' : ''}`, title: tip }, meters, info);
 }
 
@@ -145,7 +148,7 @@ function miniBar(cards, usage) {
   const showUsage = usage && usage.source !== 'none';
   return h('div', { class: 'minibar', onclick: expand },
     h('div', { class: 'chips' }, chips.length ? chips : h('span', { class: 'chip idle' }, 'no sessions')),
-    showUsage && h('div', { class: `mmeters${usage.stale ? ' stale' : ''}` },
+    showUsage && h('div', { class: `mmeters${usage.stale ? ' stale' : ''}`, title: usage.stale ? `Reading from ${ago(usage.at)} ago${usage.autoRefreshOn ? '' : ' · right-click the Claude tray icon to refresh'}` : 'From the Claude app' },
       mm('5h', usage.fiveHour), mm('wk', usage.weekly)),
     showUsage && h('button', { // same refresh as the panel's ↻ (re-reads Claude's usage file)
       class: `ib small mrefresh${Date.now() < refreshSpinUntil ? ' spin' : ''}`, title: 'Refresh usage now', 'aria-label': 'Refresh usage now',
