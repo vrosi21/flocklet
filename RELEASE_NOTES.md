@@ -1,1 +1,1 @@
-- When the usage reading is old, the panel now says how to get a fresh one: right-click the Claude tray icon (Claude then refreshes its usage for 24 hours).
+- Task Manager and other Windows lists now show the app as "Flocklet" instead of a long sentence.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- Process name: Task Manager shows "Flocklet" (the exe's description was the long package description).
+
 ## 0.3.1
 
 - Old usage reading: the panel and minimised bar say how to refresh it (right-click the Claude tray icon).
