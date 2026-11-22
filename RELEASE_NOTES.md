@@ -1,3 +1,1 @@
-- **A short tour** opens on first start: seven pages on what Flocklet does, with a demo permission card to try. Reopen it from the tray menu or Settings → Tour. After later updates you only see the pages that are new.
-- **Pick a style**: six ready-made styles (Neutral, Campfire, Marshmallow, Terminal, Arcade, Workshop), or mix your own colours and fonts.
-- **Neutral is the new default** for new installs, and light or dark follows Windows ("Auto"). Your current theme stays as it is.
+- **Fix: a rejected plan no longer sticks.** If you turned down a plan in Claude ("keep planning"), its "Plan ready for review" card stayed until the turn ended, even after you approved the next plan. It now clears as soon as Claude carries on. The same goes for a question you answered in the app.

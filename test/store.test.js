@@ -76,6 +76,28 @@ test('permission waits pair with PreToolUse and clear only on the matching tool 
   assert.equal(c.waiting, null);
 });
 
+test('a plan rejected in the app (no PostToolUse) clears once Claude moves on', () => {
+  const { hook, card, tick } = setup();
+  hook('UserPromptSubmit');
+  hook('PreToolUse', { tool_name: 'ExitPlanMode', tool_use_id: 'p1', tool_input: { plan: 'v1' } });
+  tick(40);
+  hook('PermissionRequest', { tool_name: 'ExitPlanMode', tool_input: { plan: 'v1' } });
+  assert.equal(card().waiting.kind, 'plan');
+  hook('PreToolUse', { tool_name: 'Read', tool_use_id: 's1', agent_id: 'sub-1', tool_input: { file_path: 'a' } });
+  assert.equal(card().waiting.kind, 'plan', 'a subagent tool must not clear it');
+  tick(60_000); // rejected with feedback: Claude edits the plan and asks again
+  hook('PreToolUse', { tool_name: 'Edit', tool_use_id: 'e1', tool_input: { file_path: 'plan.md' } });
+  assert.equal(card().waiting, null);
+  assert.equal(card().state, 'working');
+  hook('PreToolUse', { tool_name: 'ExitPlanMode', tool_use_id: 'p2', tool_input: { plan: 'v2' } });
+  tick(40);
+  hook('PermissionRequest', { tool_name: 'ExitPlanMode', tool_input: { plan: 'v2' } });
+  assert.equal(card().waiting.kind, 'plan');
+  hook('PostToolUse', { tool_name: 'ExitPlanMode', tool_use_id: 'p2', tool_input: { plan: 'v2' } });
+  assert.equal(card().waiting, null);
+  assert.equal(card().moreWaiting, 0);
+});
+
 test('AskUserQuestion becomes a question card with the question text', () => {
   const { hook, card } = setup();
   hook('UserPromptSubmit');

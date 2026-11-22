@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+- Fix: a plan or question rejected in Claude (no PostToolUse is sent for a rejection) kept its card
+  "waiting" until the turn ended. A new main-thread tool call now clears it; subagent tool calls do not.
+
 ## 0.4.0
 
 - First-run tour (own window, 7 pages): sessions, answering from the panel (demo card), style, pets, the

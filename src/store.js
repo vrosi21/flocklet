@@ -253,6 +253,12 @@ class SessionStore {
         break;
 
       case 'PreToolUse': {
+        // A plan or question rejected in the app ("No, keep planning" plus feedback) gets no PostToolUse, so
+        // its wait would hang until the turn ends. The main thread is blocked while one is really open,
+        // so a new main-thread tool means it was answered there. Subagent events carry agent_id: skip those.
+        if (!ev.agent_id) {
+          this._removeWaits(r, (w) => (w.kind === 'plan' || w.kind === 'question') && w.toolUseId !== ev.tool_use_id);
+        }
         if (r.state !== 'working' && r.state !== 'waiting') { r.state = 'working'; r.turnStartedAt = at; r.onDeck = true; }
         const label = describeTool(tool, input);
         if (label) r.activity = label;
