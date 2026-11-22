@@ -1,1 +1,3 @@
-- Task Manager and other Windows lists now show the app as "Flocklet" instead of a long sentence.
+- **A short tour** opens on first start: seven pages on what Flocklet does, with a demo permission card to try. Reopen it from the tray menu or Settings → Tour. After later updates you only see the pages that are new.
+- **Pick a style**: six ready-made styles (Neutral, Campfire, Marshmallow, Terminal, Arcade, Workshop), or mix your own colours and fonts.
+- **Neutral is the new default** for new installs, and light or dark follows Windows ("Auto"). Your current theme stays as it is.

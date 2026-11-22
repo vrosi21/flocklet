@@ -1,9 +1,10 @@
 /* Flocklet design tokens
  * Two independent layers, set on <html>:
- *   data-palette = campfire | crimson-hour | midnight-plum | lagoon | concrete | marshmallow | phosphor
+ *   data-palette = graphite | campfire | crimson-hour | midnight-plum | lagoon | concrete | marshmallow | phosphor
  *   data-mode    = light | dark   (optional; omit = the palette's native mode)
  *   data-look    = pocket | puff | shell | arcade | studio | tube
- * Defaults (no attributes): Campfire dark + Pocket.
+ * Defaults (no attributes): Campfire dark + Pocket. New installs start on Graphite + Studio,
+ * light or dark following Windows (themes.js DEFAULT).
  * The app always sets data-mode explicitly (resolved in main.js), so a palette's twin
  * block wins when the mode differs from its native one.
  * Palette ids, names and swatches are listed again in renderer/themes.js (keep in sync;
@@ -30,7 +31,7 @@
  * so group colours stay recognisable across palettes. Pets use them too.
  * ========================================================= */
 
-/* ---------- Campfire (native dark) — default ---------- */
+/* ---------- Campfire (native dark) ---------- */
 :root,
 [data-palette="campfire"] {
   color-scheme: dark;
@@ -47,6 +48,25 @@
   --accent: #d9622f; --accent-ink: #ffffff;
   --warn: #c98a12; --ok: #2f9e62; --err: #d6434d;
   --g1: #d6434d; --g2: #d9622f; --g3: #c98a12; --g4: #2f9e62; --g5: #3f86d9; --g6: #8a5fe0;
+}
+
+/* ---------- Graphite (native dark) — neutral, the default for new installs.
+ * After Campfire on purpose: Campfire also sits on :root (same specificity), so the later block wins. ---------- */
+[data-palette="graphite"] {
+  color-scheme: dark;
+  --bg: #1c1d20; --card: #25262a; --card-hi: #2d2e33; --line: rgba(255, 255, 255, 0.08);
+  --text: #ececee; --muted: #9a9ba3;
+  --accent: #7aa7ff; --accent-ink: #14161b;
+  --warn: #f2b84b; --ok: #5fcf8e; --err: #f06a6a;
+  --g1: #f06a6a; --g2: #f0905a; --g3: #f2b84b; --g4: #5fcf8e; --g5: #7aa7ff; --g6: #b08cf5;
+}
+[data-palette="graphite"][data-mode="light"] {
+  color-scheme: light;
+  --bg: #f5f5f6; --card: #ffffff; --card-hi: #ebecef; --line: rgba(20, 22, 30, 0.10);
+  --text: #1e1f24; --muted: #6c6e78;
+  --accent: #2f6fde; --accent-ink: #ffffff;
+  --warn: #b97800; --ok: #23955a; --err: #d23f3f;
+  --g1: #d23f3f; --g2: #d46a2a; --g3: #b97800; --g4: #23955a; --g5: #2f6fde; --g6: #7c55d6;
 }
 
 /* ---------- Crimson hour (native dark) ---------- */

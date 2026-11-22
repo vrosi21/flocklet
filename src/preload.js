@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('agentdeck', {
   set: (patch) => ipcRenderer.send('ui:set', patch),
   dockMenu: () => ipcRenderer.send('ui:dockMenu'),
   checkUpdates: () => ipcRenderer.send('ui:checkUpdates'),
+  openTour: () => ipcRenderer.send('ui:tour'),
+  tourDone: (mode) => ipcRenderer.send('tour:done', String(mode)),
   fold: (key, folded) => ipcRenderer.send('ui:fold', String(key), folded === true),
   hide: () => ipcRenderer.send('ui:hide'),
   refreshUsage: () => ipcRenderer.send('ui:refreshUsage'),

@@ -16,6 +16,7 @@ const { watchDesktopSessions } = require('./desktopSessions');
 const Grouping = require('../renderer/grouping');
 const Themes = require('../renderer/themes');
 const Pets = require('../renderer/pets');
+const Tour = require('../renderer/tour-pages');
 const { chickBitmap } = require('./trayIcon');
 const { transitions } = require('./notify');
 const { readContext } = require('./context');
@@ -79,6 +80,7 @@ function loadConfig() {
   if (typeof c.notify !== 'boolean') c.notify = true;
   if (!Array.isArray(c.quiet)) c.quiet = [];
   if (!Array.isArray(c.folded)) c.folded = [];
+  if (typeof c.tourSeen !== 'string') c.tourSeen = null;
   c.width = PanelSize.clampWidth(c.width);
   c.maxHeight = PanelSize.clampCap(c.maxHeight, 10000);
   if (typeof c.miniList !== 'boolean') c.miniList = c.miniMaxHeight != null; // was a pixel height
@@ -149,6 +151,9 @@ function pushState() {
     saveDeck();
     updateTray();
     if (win && !win.isDestroyed()) {
+      const ui = { muted: cfg.muted, collapsed: cfg.collapsed, showIdle: cfg.showIdle, rail: cfg.rail, drawer: cfg.drawer, notify: cfg.notify, dock: cfg.dock, startup: INSTALLED ? cfg.startup : null,
+        theme: cfg.theme, mode: Themes.resolveMode(cfg.theme, nativeTheme.shouldUseDarkColors) };
+      if (tourWin && !tourWin.isDestroyed()) tourWin.webContents.send('state', { ui });
       win.webContents.send('state', {
         ...snap,
         ui: { muted: cfg.muted, collapsed: cfg.collapsed, showIdle: cfg.showIdle, rail: cfg.rail, drawer: cfg.drawer, notify: cfg.notify, dock: cfg.dock, startup: INSTALLED ? cfg.startup : null,
@@ -356,6 +361,7 @@ function rebuildTrayMenu() {
     { label: 'Reconnect to Claude Code', click: ensureHooks, enabled: !!server },
     { type: 'separator' },
     { label: 'Theme', submenu: themeMenu() },
+    { label: 'Show the tour', click: () => openTour(true) },
     { label: 'Start with Windows', type: 'checkbox', checked: !!(cfg && cfg.startup), enabled: INSTALLED,
       click: (mi) => { Release.setStartup(app, cfg, mi.checked); saveConfig(); pushState(); } },
     { label: 'Check for updates', click: () => updates.check(), visible: updates.enabled },
@@ -364,6 +370,37 @@ function rebuildTrayMenu() {
     { label: 'Quit Flocklet', click: () => app.quit() },
   ]));
 }
+
+// ---------- tour (first run, "What's new" after an update, or on request) ----------
+let tourWin = null;
+function openTour(force) {
+  const plan = Tour.pagesFor({ seen: cfg.tourSeen, current: app.getVersion(), forceTour: !!force });
+  if (plan.mode === 'none') return;
+  if (tourWin && !tourWin.isDestroyed()) { tourWin.show(); tourWin.focus(); return; }
+  const area = screen.getDisplayMatching(win && !win.isDestroyed() ? win.getBounds() : screen.getPrimaryDisplay().bounds).workArea;
+  const W = 640, H = 580;
+  tourWin = new BrowserWindow({
+    x: Math.round(area.x + (area.width - W) / 2), y: Math.round(area.y + (area.height - H) / 2), width: W, height: H,
+    frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: false,
+    maximizable: false, minimizable: false, fullscreenable: false, alwaysOnTop: true, show: false, title: 'Flocklet tour',
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
+  });
+  tourWin.setAlwaysOnTop(true, 'screen-saver');
+  tourWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  tourWin.webContents.on('will-navigate', (e) => e.preventDefault());
+  tourWin.once('ready-to-show', () => { tourWin.show(); tourWin.focus(); });
+  tourWin.on('closed', () => { tourWin = null; });
+  tourWin.loadFile(path.join(__dirname, '..', 'renderer', 'tour.html'),
+    { query: { mode: plan.mode, seen: cfg.tourSeen || '', version: app.getVersion() } });
+  log('tour', { mode: plan.mode, pages: plan.pages.length });
+}
+// Finished, skipped or closed: don't show these pages again (a later version may add new ones).
+ipcMain.on('tour:done', () => {
+  cfg.tourSeen = app.getVersion();
+  saveConfig();
+  if (tourWin && !tourWin.isDestroyed()) tourWin.close();
+});
+ipcMain.on('ui:tour', () => openTour(true));
 
 function setView(patch) {
   Object.assign(cfg, patch);
@@ -679,6 +716,7 @@ if (!app.requestSingleInstanceLock()) {
     setTimeout(() => refreshContext(), 2000);
     ensureStartMenuShortcut();
     registerToastIdentity();
+    setTimeout(() => openTour(false), 1500); // first start: the tour; after an update: only what is new
     updates = Release.initUpdates({ // installed app: "Update ready" dialog + notification + tray item
       app, dialog, log, getWindow: () => win, onReady: () => rebuildTrayMenu(),
       notify: (title, body, onClick) => {

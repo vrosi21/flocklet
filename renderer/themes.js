@@ -2,6 +2,7 @@
 // Colours live in theme.css; this file only knows ids, names, native modes and swatch colours.
 (function (root) {
   const PALETTES = [
+    { id: 'graphite', name: 'Graphite', native: 'dark', swatch: { bg: '#1c1d20', accent: '#7aa7ff', warn: '#f2b84b' } },
     { id: 'campfire', name: 'Campfire', native: 'dark', swatch: { bg: '#17151a', accent: '#ef7d52', warn: '#f5b942' } },
     { id: 'crimson-hour', name: 'Crimson hour', native: 'dark', swatch: { bg: '#1a1013', accent: '#e8364f', warn: '#ffb547' } },
     { id: 'midnight-plum', name: 'Midnight plum', native: 'dark', swatch: { bg: '#15111f', accent: '#9d6bff', warn: '#ffcc66' } },
@@ -21,15 +22,25 @@
     { id: 'tube', name: 'Tube', font: 'VT323' },
   ];
 
-  // palette = the palette's own mode; windows = follow the Windows app theme.
+  // windows = follow the Windows app theme (the default, shown as "Auto"); palette = the palette's own mode.
   const MODES = [
-    { id: 'palette', name: 'Auto' },
+    { id: 'windows', name: 'Auto' },
     { id: 'light', name: 'Light' },
     { id: 'dark', name: 'Dark' },
-    { id: 'windows', name: 'Windows' },
+    { id: 'palette', name: "Palette's own" },
   ];
 
-  const DEFAULT = { palette: 'campfire', look: 'pocket', mode: 'palette' };
+  // Ready-made palette + look pairs (the tour's style page). The first one is the default for new installs.
+  const PRESETS = [
+    { id: 'neutral', name: 'Neutral', palette: 'graphite', look: 'studio', blurb: 'Calm and clean' },
+    { id: 'campfire', name: 'Campfire', palette: 'campfire', look: 'pocket', blurb: 'Warm, a bit pixel' },
+    { id: 'soft', name: 'Marshmallow', palette: 'marshmallow', look: 'puff', blurb: 'Soft and round' },
+    { id: 'terminal', name: 'Terminal', palette: 'phosphor', look: 'tube', blurb: 'Green screen' },
+    { id: 'arcade', name: 'Arcade', palette: 'midnight-plum', look: 'arcade', blurb: 'Retro game' },
+    { id: 'workshop', name: 'Workshop', palette: 'concrete', look: 'shell', blurb: 'All code font' },
+  ];
+
+  const DEFAULT = { palette: PRESETS[0].palette, look: PRESETS[0].look, mode: 'windows' };
   const has = (list, id) => list.some((x) => x.id === id);
 
   function normalizeTheme(t) {
@@ -49,7 +60,9 @@
     return PALETTES.find((p) => p.id === t.palette).native;
   }
 
-  const api = { PALETTES, LOOKS, MODES, DEFAULT, normalizeTheme, resolveMode };
+  const presetOf = (t) => PRESETS.find((p) => t && p.palette === t.palette && p.look === t.look) || null;
+
+  const api = { PALETTES, LOOKS, MODES, PRESETS, DEFAULT, normalizeTheme, resolveMode, presetOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FlockletThemes = api;
 })(typeof window !== 'undefined' ? window : this);

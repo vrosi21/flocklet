@@ -11,7 +11,9 @@ that shows what its agent is doing, so you can keep working elsewhere and still 
 - **Three views**: the full panel with a dockable sidebar, a minimised stats bar, or a **pet dock** (a slim
   taskbar of pets with speech bubbles: `?` question, `!` permission, `✓` done).
 - **Notifications** when a session finishes or needs you; per-session mute.
-- **Make it yours**: palettes, looks, pets and colours per session; resize, fold groups, pin sessions.
+- **Make it yours**: ready-made styles or your own palette + look, light/dark following Windows, pets and
+  colours per session; resize, fold groups, pin sessions.
+- **A one-minute tour** on first start (reopen it from the tray or Settings).
 
 ## Install
 

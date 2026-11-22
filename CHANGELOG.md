@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- First-run tour (own window, 7 pages): sessions, answering from the panel (demo card), style, pets, the
+  three views (pictures of the real panel / minimised bar / pet dock), notifications. Reopen: tray menu or
+  Settings → Tour. After an update it shows only pages newer than the last tour you finished.
+- Style presets: Neutral, Campfire, Marshmallow, Terminal, Arcade, Workshop (palette + look pairs).
+- New palette Graphite. New installs start on Neutral (Graphite + Studio) with light/dark following Windows;
+  the light/dark choices are now Auto (follows Windows), Light, Dark and Palette's own. Saved themes are kept.
+
 ## 0.3.2
 
 - Process name: Task Manager shows "Flocklet" (the exe's description was the long package description).
