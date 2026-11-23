@@ -7,6 +7,17 @@ const path = require('path');
 const APP_ID = 'com.flocklet.app'; // installed build: AppUserModelID = electron-builder appId
 const DEV_AUMID = 'AgentDeck'; // run from source: keeps the Windows notification settings it already has
 const CHECK_EVERY_MS = 6 * 3600e3;
+// Right after Windows starts, security drivers are still loading and a silent install can fail without a word
+// (seen twice, never mid-session). So the first check waits until the PC has been up a few minutes.
+const BOOT_SETTLE_S = 180;
+const firstCheckDelayMs = (uptimeS) => Math.max(15, BOOT_SETTLE_S - uptimeS) * 1e3;
+
+// "Restart now" notes the version it is installing. Starting again on another version means that install
+// never happened: the next try runs the installer visibly, so you see its progress or its error.
+function lastInstall({ tried, running }) {
+  if (!tried) return { failed: false, clear: false };
+  return { failed: tried !== running, clear: true };
+}
 
 // Installed = built by electron-builder. Not enough: app.isPackaged only looks at the exe's file name, and the
 // source copy runs a renamed electron.exe (Flocklet.exe, see scripts/brand.js). Electron sets defaultApp
@@ -52,7 +63,8 @@ function plainNotes(notes) {
 // "Later" installs when you quit Flocklet. So it cannot be missed (a dialog without a parent opens behind the
 // always-on-top panel): the dialog is attached to the panel, a Windows notification says it too, and the tray
 // menu offers "Restart to update" until you do.
-function initUpdates({ app, dialog, log, getWindow = () => null, notify = () => {}, onReady = () => {} }) {
+function initUpdates({ app, dialog, log, getWindow = () => null, notify = () => {}, onReady = () => {},
+  memo = { get: () => null, set() {} }, uptime = () => require('os').uptime() }) {
   if (!isInstalled(app)) return { enabled: false, check() {}, ready: () => null, install() {} };
   const { autoUpdater } = require('electron-updater');
   autoUpdater.autoDownload = true;
@@ -61,7 +73,14 @@ function initUpdates({ app, dialog, log, getWindow = () => null, notify = () => 
   let byHand = false;
   let asked = null;
   let ready = null;
-  const install = () => setImmediate(() => autoUpdater.quitAndInstall(true, true));
+  const last = lastInstall({ tried: memo.get(), running: app.getVersion() });
+  if (last.failed) log('update did not install', { tried: memo.get(), running: app.getVersion() });
+  if (last.clear) memo.set(null);
+  const install = () => {
+    if (ready) memo.set(ready);
+    log('update install', { version: ready, visible: last.failed });
+    setImmediate(() => autoUpdater.quitAndInstall(!last.failed, true));
+  };
   const ask = (opts) => {
     const w = getWindow();
     return w && !w.isDestroyed() && w.isVisible() ? dialog.showMessageBox(w, opts) : dialog.showMessageBox(opts);
@@ -94,9 +113,9 @@ function initUpdates({ app, dialog, log, getWindow = () => null, notify = () => 
     byHand = false;
   });
   const check = (manual) => { byHand = !!manual; autoUpdater.checkForUpdates().catch(() => {}); };
-  setTimeout(() => check(false), 15e3);
+  setTimeout(() => check(false), firstCheckDelayMs(uptime()));
   setInterval(() => check(false), CHECK_EVERY_MS);
   return { enabled: true, check: () => check(true), ready: () => ready, install };
 }
 
-module.exports = { isInstalled, APP_ID, DEV_AUMID, settingsDir, migrateSettings, initStartup, setStartup, plainNotes, initUpdates };
+module.exports = { isInstalled, APP_ID, DEV_AUMID, settingsDir, migrateSettings, initStartup, setStartup, plainNotes, initUpdates, lastInstall, firstCheckDelayMs };

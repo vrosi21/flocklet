@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2
+
+- Fix: "Restart now" shortly after Windows started could quit Flocklet without installing (the silent
+  installer failed while security drivers were still loading). The first update check now waits until the PC
+  has been up 3 minutes; a "Restart now" that did not install is noticed on the next start, and the retry runs
+  the installer visibly.
+
 ## 0.4.1
 
 - Fix: a plan or question rejected in Claude (no PostToolUse is sent for a rejection) kept its card

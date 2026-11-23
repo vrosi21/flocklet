@@ -81,6 +81,7 @@ function loadConfig() {
   if (!Array.isArray(c.quiet)) c.quiet = [];
   if (!Array.isArray(c.folded)) c.folded = [];
   if (typeof c.tourSeen !== 'string') c.tourSeen = null;
+  if (typeof c.updateTried !== 'string') c.updateTried = null; // version "Restart now" last tried to install
   c.width = PanelSize.clampWidth(c.width);
   c.maxHeight = PanelSize.clampCap(c.maxHeight, 10000);
   if (typeof c.miniList !== 'boolean') c.miniList = c.miniMaxHeight != null; // was a pixel height
@@ -719,6 +720,7 @@ if (!app.requestSingleInstanceLock()) {
     setTimeout(() => openTour(false), 1500); // first start: the tour; after an update: only what is new
     updates = Release.initUpdates({ // installed app: "Update ready" dialog + notification + tray item
       app, dialog, log, getWindow: () => win, onReady: () => rebuildTrayMenu(),
+      memo: { get: () => cfg.updateTried || null, set: (v) => { cfg.updateTried = v; saveConfig(); } },
       notify: (title, body, onClick) => {
         if (!Notification.isSupported()) return;
         const t = new Notification({ title, body, icon: chickIcon(null, 64) });

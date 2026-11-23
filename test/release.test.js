@@ -48,3 +48,15 @@ test('a source copy run by a renamed electron.exe is not "installed"', () => {
   assert.equal(R.isInstalled({ isPackaged: true }, { defaultApp: true }), false, 'Flocklet.exe <folder> (scripts/brand.js)');
   assert.equal(R.isInstalled({ isPackaged: false }, {}), false, 'electron.exe <folder>');
 });
+
+test('a "Restart now" that did not install is noticed on the next start', () => {
+  assert.deepEqual(R.lastInstall({ tried: null, running: '0.4.0' }), { failed: false, clear: false });
+  assert.deepEqual(R.lastInstall({ tried: '0.4.1', running: '0.4.1' }), { failed: false, clear: true });
+  assert.deepEqual(R.lastInstall({ tried: '0.4.1', running: '0.4.0' }), { failed: true, clear: true });
+});
+
+test('the first update check waits until Windows has settled after boot', () => {
+  assert.equal(R.firstCheckDelayMs(30), 150e3);
+  assert.equal(R.firstCheckDelayMs(170), 15e3);
+  assert.equal(R.firstCheckDelayMs(3600), 15e3);
+});
