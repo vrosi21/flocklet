@@ -63,8 +63,30 @@ function plainNotes(notes) {
 // "Later" installs when you quit Flocklet. So it cannot be missed (a dialog without a parent opens behind the
 // always-on-top panel): the dialog is attached to the panel, a Windows notification says it too, and the tray
 // menu offers "Restart to update" until you do.
+// Debug log only: a small detached PowerShell outlives Flocklet, waits for the installer and writes its exit code
+// and the installed version to the log (the silent installer keeps no log of its own).
+const WATCH_PS = `param($log, $exe)
+function Add($m) { Add-Content -LiteralPath $log -Value ("{0} dbg installer {1}" -f (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ'), $m) }
+$p = $null
+for ($i = 0; $i -lt 80 -and -not $p; $i++) { $p = Get-Process -Name 'Flocklet-Setup-*' -ErrorAction SilentlyContinue | Select-Object -First 1; if (-not $p) { Start-Sleep -Milliseconds 250 } }
+if (-not $p) { Add 'not seen within 20 s'; exit }
+Add ("started pid " + $p.Id)
+if ($p.WaitForExit(900000)) { Add ("exit code " + $p.ExitCode) } else { Add 'still running after 15 min' }
+Start-Sleep -Seconds 2
+try { Add ("installed exe " + (Get-Item -LiteralPath $exe -ErrorAction Stop).VersionInfo.ProductVersion) } catch { Add 'installed exe missing' }
+`;
+function watchInstaller(logFile, log) {
+  try {
+    const script = path.join(path.dirname(logFile), 'install-watch.ps1');
+    fs.writeFileSync(script, WATCH_PS);
+    const { spawn } = require('child_process');
+    spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, logFile, process.execPath],
+      { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  } catch (e) { log('dbg installer watch failed', e.message); }
+}
+
 function initUpdates({ app, dialog, log, getWindow = () => null, notify = () => {}, onReady = () => {},
-  memo = { get: () => null, set() {} }, uptime = () => require('os').uptime() }) {
+  memo = { get: () => null, set() {} }, uptime = () => require('os').uptime(), debug = () => false, logFile = null }) {
   if (!isInstalled(app)) return { enabled: false, check() {}, ready: () => null, install() {} };
   const { autoUpdater } = require('electron-updater');
   autoUpdater.autoDownload = true;
@@ -79,6 +101,7 @@ function initUpdates({ app, dialog, log, getWindow = () => null, notify = () => 
   const install = () => {
     if (ready) memo.set(ready);
     log('update install', { version: ready, visible: last.failed });
+    if (debug() && logFile) watchInstaller(logFile, log);
     setImmediate(() => autoUpdater.quitAndInstall(!last.failed, true));
   };
   const ask = (opts) => {

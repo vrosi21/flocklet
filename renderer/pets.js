@@ -16,7 +16,7 @@
       case 'working': return card.activity && !/^thinking/i.test(card.activity) ? 'working' : 'thinking';
       case 'waiting': return 'waiting';
       case 'done': return 'done';
-      case 'error': return 'error';
+      case 'error': return card.limited ? 'asleep' : 'error';
       default: {
         const since = card && (card.since || card.lastActivityAt);
         return since && now - since > ASLEEP_AFTER_MS ? 'asleep' : 'idle';
@@ -50,6 +50,8 @@
     '<g class="bub-bang"><circle class="p-bub" cx="31" cy="5" r="4.4"/><rect class="p-bubtx" x="30.3" y="2.2" width="1.4" height="3.6" rx="0.7"/><circle class="p-bubtx" cx="31" cy="7.3" r="0.8"/></g>' +
     '<g class="bub-x"><circle class="p-bub" cx="31" cy="5" r="4.4"/><path class="p-bubline" d="M29.3 3.3l3.4 3.4M32.7 3.3l-3.4 3.4"/></g>' +
     '<g class="bub-z"><path class="p-zline" d="M26 6.5h3l-3 3.4h3"/><path class="p-zline z2" d="M31 1.2h2.6l-2.6 3h2.6"/></g>' +
+    '<g class="emo-heart"><path class="p-heart" d="M7 10.4C3.4 8.2 2.6 5.2 4.6 4.1c1.2-.6 2.1 0 2.4.8c.3-.8 1.2-1.4 2.4-.8c2 1.1 1.2 4.1-2.4 6.3z"/></g>' +
+    '<g class="emo-note"><ellipse class="p-note" cx="5.2" cy="9.6" rx="1.8" ry="1.35" transform="rotate(-20 5.2 9.6)"/><path class="p-notel" d="M6.8 9.2V2.8q2.8.9 2.8 3.6"/></g>' +
     '<g class="spark"><path class="p-spark" d="M31 0.6l1 2.3 2.3 1-2.3 1-1 2.3-1-2.3-2.3-1 2.3-1z"/><path class="p-spark s2" d="M4.5 4l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z"/></g>';
 
   const BODIES = {

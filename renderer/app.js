@@ -16,8 +16,40 @@ function pet(kind, petState, extra = {}) {
   const el = h('div', { class: 'pet', 'data-s': petState, ...extra });
   el.style.setProperty('--age', `-${Date.now() - EPOCH}ms`);
   el.innerHTML = P.petSvg(kind); // constant markup only
+  const e = extra['data-key'] && emotes.get(extra['data-key']);
+  if (e) showEmote(el, e);
   return el;
 }
+
+// Emotes: now and then a busy pet does something cute for a moment (a hop, a heart, a little tune, a twirl,
+// a stretch, sparkles). About one per pet every 40 s, at most two at once; never for idle, asleep or stuck pets.
+const EMOTES = ['hop', 'heart', 'note', 'twirl', 'stretch', 'sparkle'];
+const EMOTE_MS = 1600;
+const EMOTE_STATES = new Set(['working', 'thinking', 'done']);
+const emotes = new Map(); // session key -> { kind, at }; kept here so a re-render mid-emote carries on
+const lastEmote = new Map();
+function showEmote(el, e) {
+  el.dataset.emote = e.kind;
+  el.style.setProperty('--eage', `-${Date.now() - e.at}ms`); // continue where the emote is, not from the start
+}
+const petEls = (key) => document.querySelectorAll(`.pet[data-key="${CSS.escape(key)}"]`);
+function emote(key, kind) {
+  const e = { kind, at: Date.now() };
+  emotes.set(key, e);
+  lastEmote.set(key, e.at);
+  for (const el of petEls(key)) showEmote(el, e);
+  setTimeout(() => { if (emotes.get(key) !== e) return; emotes.delete(key); for (const el of petEls(key)) delete el.dataset.emote; }, EMOTE_MS);
+}
+setInterval(() => {
+  if (!state || state.ui.emotes === false || document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (emotes.size >= 2) return;
+  const now = Date.now();
+  const keys = [...new Set([...document.querySelectorAll('.pet[data-key]')]
+    .filter((el) => EMOTE_STATES.has(el.dataset.s)).map((el) => el.dataset.key))]
+    .filter((k) => !emotes.has(k) && now - (lastEmote.get(k) || 0) > 20e3);
+  if (!keys.length || Math.random() > Math.min(0.5, keys.length * 0.075)) return;
+  emote(keys[Math.floor(Math.random() * keys.length)], EMOTES[Math.floor(Math.random() * EMOTES.length)]);
+}, 3000);
 const petColor = (c) => `--pc:var(--g${c.colorSlot || P.colorSlot(c.hue)})`;
 
 function icon(name) {
@@ -59,38 +91,8 @@ function ago(ts) {
 }
 const timer = (ts, prefix = '') => h('span', { class: 'timer', 'data-since': ts, 'data-prefix': prefix }, prefix + ago(ts));
 
-// ---------- usage ----------
-function meter(label, v, title) {
-  const level = v == null ? 'none' : v >= 90 ? 'hot' : v >= 70 ? 'warm' : '';
-  return h('div', { class: `meter ${level}`, title },
-    h('span', { class: 'mlabel' }, label),
-    h('span', { class: 'bar' }, h('i', { style: `--p:${(v ?? 0) / 100}` })),
-    h('span', { class: 'mval' }, v == null ? '–' : `${v}%`));
-}
-
-const clock = (ts) => new Date(ts).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-
-let refreshSpinUntil = 0;
-function usageRow(u) {
-  const tip = u.autoRefreshOn ? `From the Claude app, refreshed every 5-15 min until ${clock(u.autoRefreshUntil)}.`
-    : 'From the Claude app. It only refreshes for 24 h after you right-click its tray icon.';
-  const refresh = h('button', {
-    class: `ib small${Date.now() < refreshSpinUntil ? ' spin' : ''}`, title: 'Refresh usage now', 'aria-label': 'Refresh usage now',
-    onclick: (e) => { e.stopPropagation(); refreshSpinUntil = Date.now() + 1500; api.refreshUsage(); render(); },
-  }, icon('refresh'));
-  const meters = h('div', { class: 'meters' },
-    meter('5h', u.fiveHour, u.fiveHour == null ? 'No reading inside the current 5-hour window' : '5-hour limit'),
-    meter('Week', u.weekly, 'Weekly limit, all models'),
-    refresh);
-  // Claude desktop only writes new readings while its own poller runs (24 h after a right-click on its tray icon).
-  // An old reading says so, and how to get a new one.
-  const info = u.stale ? h('div', { class: 'unudge' }, 'Reading from ', timer(u.at), ' ago',
-    !u.autoRefreshOn && h('span', { class: 'muted' }, ' · right-click the Claude tray icon to refresh')) : null;
-  return h('div', { class: `usage${u.stale ? ' stale' : ''}`, title: tip }, meters, info);
-}
-
 // ---------- pieces ----------
-function header({ counts, ui, usage }) {
+function header({ counts, ui }) {
   const status = counts.waiting ? 'waiting' : counts.working ? 'working' : 'quiet';
   const logo = h('span', { class: 'logo', title: 'Flocklet' });
   logo.innerHTML = P.petSvg('chick'); // constant markup only
@@ -107,31 +109,18 @@ function header({ counts, ui, usage }) {
 }
 
 // ---------- minimised bar ----------
-// Collapsed panel: every session in the Sessions list by state, plus small usage meters.
+// Collapsed panel: every session in the Sessions list by state.
 // States that need you (waiting, error) get a strong colour; click anything to expand.
 const CHIP_WORD = { waiting: 'need you', error: 'error', working: 'working', done: 'done', idle: 'idle' };
-function miniBar(cards, usage) {
+function miniBar(cards) {
   const n = G.stateCounts(cards);
   const expand = () => api.set({ collapsed: false });
   const chips = G.STATE_ORDER.filter((k) => n[k]).map((k) =>
     h('button', { class: `chip ${k}`, title: `${n[k]} ${k === 'waiting' ? 'waiting for you' : k}. Click to expand`, onclick: expand },
       h('b', null, String(n[k])), ` ${k === 'waiting' && n[k] === 1 ? 'needs you' : CHIP_WORD[k]}`));
-  const mm = (label, v) => {
-    if (v == null) return null;
-    const level = v >= 90 ? 'hot' : v >= 70 ? 'warm' : '';
-    return h('div', { class: `mmeter ${level}`, title: `${label === '5h' ? '5-hour' : 'Weekly'} limit: ${v}%` },
-      h('span', { class: 'mlabel' }, label),
-      h('span', { class: 'bar' }, h('i', { style: `--p:${v / 100}` })),
-      h('span', { class: 'mval' }, `${v}%`));
-  };
-  const showUsage = usage && usage.source !== 'none';
   return h('div', { class: 'minibar', onclick: expand },
     h('div', { class: 'chips' }, chips.length ? chips : h('span', { class: 'chip idle' }, 'no sessions')),
-    showUsage && h('div', { class: `mmeters${usage.stale ? ' stale' : ''}`, title: usage.stale ? `Reading from ${ago(usage.at)} ago${usage.autoRefreshOn ? '' : ' · right-click the Claude tray icon to refresh'}` : 'From the Claude app' },
-      mm('5h', usage.fiveHour), mm('wk', usage.weekly)),
-    showUsage && h('button', { // same refresh as the panel's ↻ (re-reads Claude's usage file)
-      class: `ib small mrefresh${Date.now() < refreshSpinUntil ? ' spin' : ''}`, title: 'Refresh usage now', 'aria-label': 'Refresh usage now',
-      onclick: (e) => { e.stopPropagation(); refreshSpinUntil = Date.now() + 1500; api.refreshUsage(); render(); } }, icon('refresh')));
+  );
 }
 
 // Stretched minimised bar: deck sessions as one-line rows, urgent first. Click a row to jump in.
@@ -157,7 +146,7 @@ function themer(ui) {
     h('div', { class: 'trow' }, h('span', { class: 'tlabel' }, 'Palette'),
       T.PALETTES.map((p) => {
         const b = h('button', { class: `swatch${t.palette === p.id ? ' on' : ''}`, title: p.name, 'aria-label': p.name,
-          onclick: () => set({ palette: p.id }) });
+          ...hoverPreview({ ...t, palette: p.id }), onclick: () => { preview = null; set({ palette: p.id }); } });
         b.style.setProperty('--s-bg', p.swatch.bg);
         b.style.setProperty('--s-acc', p.swatch.accent);
         b.style.setProperty('--s-warn', p.swatch.warn);
@@ -167,20 +156,32 @@ function themer(ui) {
       T.LOOKS.map((l) => {
         const aa = h('span', { class: 'aa' }, 'Aa');
         aa.style.fontFamily = l.font;
-        return h('button', { class: `lookchip${t.look === l.id ? ' on' : ''}`, onclick: () => set({ look: l.id }) }, aa, l.name);
+        return h('button', { class: `lookchip${t.look === l.id ? ' on' : ''}`, ...hoverPreview({ ...t, look: l.id }),
+          onclick: () => { preview = null; set({ look: l.id }); } }, aa, l.name);
       })),
     h('div', { class: 'trow' }, h('span', { class: 'tlabel' }, 'Light / dark'),
       h('div', { class: 'seg' }, T.MODES.map((m) =>
-        h('button', { class: `segb${t.mode === m.id ? ' on' : ''}`, onclick: () => set({ mode: m.id }) }, m.name)))));
+        h('button', { class: `segb${t.mode === m.id ? ' on' : ''}`, ...hoverPreview({ ...t, mode: m.id }),
+          onclick: () => { preview = null; set({ mode: m.id }); } }, m.name)))));
 }
 
+// Hover a style choice: the real panel shows it until the pointer leaves (nothing is saved until you click).
+let preview = null;
+const systemDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+function previewOn(theme) { preview = T.normalizeTheme(theme); applyTheme(state.ui); }
+function previewOff() { if (!preview) return; preview = null; applyTheme(state.ui); }
+const hoverPreview = (theme) => ({ onmouseenter: () => previewOn(theme), onmouseleave: previewOff });
+function pickTheme(theme) { preview = null; api.set({ theme }); }
+
 function applyTheme(ui) {
-  const t = ui.theme || T.DEFAULT;
+  const t = preview || ui.theme || T.DEFAULT;
   const d = document.documentElement.dataset;
   if (d.palette !== t.palette) d.palette = t.palette;
   if (d.look !== t.look) d.look = t.look;
-  const mode = ui.mode || T.resolveMode(t, false);
+  const mode = preview ? T.resolveMode(preview, systemDark()) : ui.mode || T.resolveMode(t, false);
   if (d.mode !== mode) d.mode = mode;
+  const glass = String(ui.glass || 0);
+  if (d.glass !== glass) d.glass = glass;
 }
 
 // Click a session's pet to open its pet menu (petMenu below).
@@ -193,7 +194,7 @@ function togglePetMenu(c, where) {
   if (petFor) requestAnimationFrame(() => { const m = document.querySelector('.petpop'); if (m) m.scrollIntoView({ block: 'nearest' }); });
 }
 function avatar(c) {
-  const el = pet(c.pet, P.petState(c), { title: `${P.PET_NAMES[c.pet] || 'Pet'} · click to change`, class: 'pet pickable' });
+  const el = pet(c.pet, P.petState(c), { title: `${P.PET_NAMES[c.pet] || 'Pet'} · click to change, drag to move`, class: 'pet pickable', 'data-key': c.key });
   el.addEventListener('click', (e) => { e.stopPropagation(); togglePetMenu(c, 'deck'); });
   return el;
 }
@@ -226,7 +227,9 @@ function statusLine(c) {
   switch (c.state) {
     case 'waiting': return h('div', { class: 'line2 wait' }, WAIT_LABEL[c.waiting?.kind] || 'Needs you', h('span', { class: 'sep' }, '·'), timer(c.since));
     case 'done': return h('div', { class: 'line2 ok' }, 'Done', h('span', { class: 'sep' }, '·'), timer(c.since, ''), ' ago');
-    case 'error': return h('div', { class: 'line2 err' }, 'Stopped', c.error && h('span', { class: 'muted' }, ` · ${c.error}`));
+    case 'error': return c.limited
+      ? h('div', { class: 'line2 tired' }, 'Out of usage', h('span', { class: 'muted' }, ' · napping until your limit resets'))
+      : h('div', { class: 'line2 err' }, 'Stopped', c.error && h('span', { class: 'muted' }, ` · ${c.error}`));
     case 'working': return h('div', { class: 'line2' }, c.activity || 'Working…');
     default: return h('div', { class: 'line2 muted' }, 'Idle');
   }
@@ -366,7 +369,7 @@ function foldBadge(it) {
 
 function card(c, depth = 0, it = null) {
   const el = h('div', { class: `card ${c.state}${depth ? ' child' : ''}${c.pinned ? ' pinned' : ''}`,
-    style: `${petColor(c)};--depth:${depth}`, title: c.cwd || '' },
+    style: `${petColor(c)};--depth:${depth}`, title: c.cwd || '', 'data-k': c.key },
   avatar(c),
   h('div', { class: 'body' },
     h('div', { class: 'row1' },
@@ -402,7 +405,7 @@ function ctxTag(c) {
 // A parent that is not on the deck, shown as a small session card so its children visibly hang under it
 // (a plain text row read like a group header).
 function ghostRow(c, depth, it = null) {
-  return h('div', { class: `ghost${depth ? ' child' : ''}${c.canJump ? '' : ' nolink'}`, style: `${petColor(c)};--depth:${depth}`,
+  return h('div', { class: `ghost${depth ? ' child' : ''}${c.canJump ? '' : ' nolink'}`, style: `${petColor(c)};--depth:${depth}`, 'data-k': c.key,
     title: `${c.name}: parent session, not on the deck${c.cwd ? `\n${c.cwd}` : ''}`,
     onclick: () => c.canJump && api.jump(c.hostId) },
   avatar(c),
@@ -415,7 +418,7 @@ function ghostRow(c, depth, it = null) {
 }
 
 function groupHeader(it, editable = false) {
-  return h('div', { class: `ghdr${it.foldable ? ' foldable' : ''}`, style: it.color ? `--gc:var(--g${it.color})` : '',
+  return h('div', { class: `ghdr${it.foldable ? ' foldable' : ''}`, style: it.color ? `--gc:var(--g${it.color})` : '', 'data-h': it.key,
     onclick: () => it.foldable && api.fold(G.foldKeyOf(it), !it.folded) },
     foldArrow(it),
     h('span', { class: 'gdot' }), h('span', { class: 'glabel' }, it.label), h('span', { class: 'gcount' }, String(it.count)),
@@ -477,7 +480,7 @@ const MODE_LABELS = [['folder', 'Projects'], ['tree', 'Tree'], ['custom', 'Group
 
 function browser(cards, ui) {
   const hits = G.search(cards, query);
-  const arranged = G.arrange(hits, ui.groupBy, { all: cards, groups: ui.groups, showEmptyGroups: !query });
+  const arranged = G.arrange(hits, ui.groupBy, { all: cards, groups: ui.groups, showEmptyGroups: !query, folderOrder: ui.folderOrder });
   const items = query ? arranged : G.fold(arranged, ui.folded); // a search shows every match
   return h('div', { class: 'browser' },
     h('div', { class: 'btools' },
@@ -499,7 +502,7 @@ const DOCK_MAX = 14;
 let dockOpen = null; // key of the session whose card is popped up
 const seenBubbles = new Map(); // key -> signature of the event you already saw
 const bubbleOf = (c) => (c.state === 'waiting' ? (c.waiting && c.waiting.kind === 'permission' ? '!' : '?')
-  : c.state === 'done' ? '✓' : c.state === 'error' ? '×' : null);
+  : c.state === 'done' ? '✓' : c.state === 'error' ? (c.limited ? 'z' : '×') : null);
 const bubbleSig = (c) => `${c.state}|${(c.waiting && c.waiting.id) || ''}|${c.since || ''}`;
 function markSeen(c) {
   if (!bubbleOf(c) || seenBubbles.get(c.key) === bubbleSig(c)) return;
@@ -513,22 +516,24 @@ function clickDockPet(c) {
   render();
 }
 const DOCK_WORD = { waiting: 'needs you', working: 'working', done: 'done', error: 'stopped with an error', idle: 'idle' };
+const dockWord = (c) => (c.limited ? 'out of usage' : DOCK_WORD[c.state] || 'idle');
 function dockPet(c, open, names) {
   const b = bubbleOf(c);
   const unseen = b && seenBubbles.get(c.key) !== bubbleSig(c);
-  const word = c.state === 'waiting' && c.waiting ? (WAIT_LABEL[c.waiting.kind] || 'Needs you') : DOCK_WORD[c.state] || 'idle';
-  return h('button', { class: `dpet ${c.state}${open && open.key === c.key ? ' on' : ''}${names ? ' named' : ''}`, style: petColor(c),
-    title: `${c.name}: ${word} · double-click to open`, 'aria-label': `${c.name}: ${word}`,
+  const word = c.state === 'waiting' && c.waiting ? (WAIT_LABEL[c.waiting.kind] || 'Needs you') : dockWord(c);
+  return h('button', { class: `dpet ${c.state}${c.limited ? ' limited' : ''}${open && open.key === c.key ? ' on' : ''}${names ? ' named' : ''}`, style: petColor(c),
+    title: `${c.name}: ${word} · double-click to open, drag to move`, 'aria-label': `${c.name}: ${word}`, 'data-k': c.key,
     onclick: () => clickDockPet(c), ondblclick: () => c.canJump && api.jump(c.hostId), onmouseenter: () => markSeen(c) },
-  unseen && h('span', { class: `bubble ${c.state}` }, b),
-  h('span', { class: 'dpetimg' }, pet(c.pet, P.petState(c)), h('span', { class: `ddot ${c.state}` })),
-  names && h('span', { class: 'dname' }, c.name));
+  unseen && h('span', { class: `bubble ${c.limited ? 'limited' : c.state}` }, b),
+  h('span', { class: 'dpetimg' }, pet(c.pet, P.petState(c), { 'data-key': c.key })),
+  names && h('span', { class: 'dname' }, c.name),
+  h('span', { class: `dbar ${c.limited ? 'limited' : c.state}` }));
 }
 // Groups follow the panel's grouping (Projects / Groups / All) and its folds: a folded group is one stacked
 // icon with a count; sessions that need you stay visible next to it.
 function dockGroups(cards, ui) {
   const active = cards.filter((c) => c.group === 'active');
-  const items = G.arrange(active, ui.groupBy === 'tree' ? 'none' : ui.groupBy, { all: cards, groups: ui.groups });
+  const items = G.arrange(active, ui.groupBy === 'tree' ? 'none' : ui.groupBy, { all: cards, groups: ui.groups, folderOrder: ui.folderOrder });
   const groups = [];
   let cur = null;
   for (const it of items) {
@@ -547,6 +552,7 @@ function dockView(cards, ui) {
   const names = !!ui.dockNames;
   let budget = DOCK_MAX;
   let more = 0;
+  const labelled = groups.filter((g) => g.label).length > 1; // one group: its name adds nothing
   const blocks = groups.map((g) => {
     const urgent = g.folded ? g.cards.filter((c) => c.state === 'waiting' || c.state === 'error') : [];
     const pets = [];
@@ -562,24 +568,20 @@ function dockView(cards, ui) {
       pets.push(dockPet(c, open, names));
     }
     if (!pets.length) return null;
-    if (!g.label) return h('div', { class: 'dgroup plain' }, h('div', { class: 'dpets' }, pets));
-    return h('div', { class: `dgroup${g.folded ? ' folded' : ''}`, style: g.color ? `--gc:var(--g${g.color})` : '' },
-      h('div', { class: 'dpets' }, pets),
+    if (!g.label || !labelled) return h('div', { class: 'dgroup plain' }, h('div', { class: 'dpets' }, pets));
+    return h('div', { class: `dgroup${g.folded ? ' folded' : ''}`, 'data-h': g.key },
       h('button', { class: 'dglabel', title: g.folded ? `Unfold ${g.label}` : `Fold ${g.label}`,
-        onclick: () => api.fold(`h:${g.key}`, !g.folded) }, g.label));
+        style: g.color ? `color:var(--g${g.color})` : '', onclick: () => api.fold(`h:${g.key}`, !g.folded) }, g.label),
+      h('div', { class: 'dpets' }, pets));
   }).filter(Boolean);
-  const logo = h('button', { class: 'dlogo', title: 'Back to the panel', 'aria-label': 'Back to the panel',
-    onclick: () => { dockOpen = null; api.set({ dock: false }); } });
-  logo.innerHTML = P.petSvg('chick'); // constant markup only
   return [
     open && h('div', { class: 'dockpop' }, card(open, 0)),
     h('div', { class: `dockbar${names ? ' named' : ''}`, oncontextmenu: (e) => { e.preventDefault(); api.dockMenu(); } },
       blocks.length ? blocks : h('span', { class: 'dempty' }, 'No pets on the deck'),
       more > 0 && h('button', { class: 'dmore', title: `${more} more: open the panel`, onclick: () => api.set({ dock: false }) }, `+${more}`),
-      h('span', { class: 'dsep' }),
       h('div', { class: 'dend' },
-        btn('minimise', 'Minimise to tray', () => api.hide(), { class: 'ib small' }),
-        logo)),
+        btn('expand', 'Open the full panel', () => { dockOpen = null; api.set({ dock: false }); }, { class: 'ib small' }),
+        btn('minimise', 'Hide to the tray', () => api.hide(), { class: 'ib small' })))
   ];
 }
 
@@ -592,17 +594,104 @@ function railButton(name, iconName, label, badge) {
     'aria-pressed': on ? 'true' : 'false', onclick: () => openDrawer(name) },
   icon(iconName), badge != null && h('span', { class: 'rbadge' }, String(badge)));
 }
-function settingsDrawer(ui) {
-  const sideBtn = (side, label) => h('button', { class: `segb${ui.rail === side ? ' on' : ''}`, onclick: () => api.set({ rail: side }) }, label);
-  const toggle = (on, label, onclick) => h('button', { class: `toggle${on ? ' on' : ''}`, role: 'switch', 'aria-checked': on ? 'true' : 'false', onclick },
-    h('span', { class: 'knob' }), label);
-  return h('div', { class: 'settings', 'data-scroll': 'settings' },
-    h('h3', { class: 'dhead' }, 'Settings'),
+const ZOOMS = [[0.9, 'Small'], [1, 'Normal'], [1.25, 'Large'], [1.5, 'Extra large']];
+const FEEL = [['mood', 'Mood', 'Calm', 'Playful'], ['crisp', 'Edges', 'Soft', 'Crisp']];
+const GLASS = ['Off', 'Light', 'Medium', 'Strong'];
+const shuffleLocks = { palette: false, look: false, mode: false };
+// A slider being dragged: hold re-renders (a live event would rebuild it under the pointer), catch up after.
+let holdRender = false, renderMissed = false;
+let carryHold = false;   // carry.js: a pet is being carried, keep the DOM still until it lands
+let afterRender = null;  // carry.js: one-shot hook run right after the next render (the landing animation)
+window.addEventListener('pointerup', () => { if (!holdRender) return; holdRender = false; if (renderMissed) { renderMissed = false; render(); } });
+const themeName = (t) => `${(T.PALETTES.find((p) => p.id === t.palette) || {}).name} + ${(T.LOOKS.find((l) => l.id === t.look) || {}).name}`;
+function swatchDot(t, cls = 'sdot') {
+  const pal = T.PALETTES.find((p) => p.id === t.palette) || T.PALETTES[0];
+  const el = h('span', { class: cls });
+  el.style.setProperty('--s-bg', pal.swatch.bg);
+  el.style.setProperty('--s-acc', pal.swatch.accent);
+  return el;
+}
+function slider(label, min, max, value, labels, onInput, onChange) {
+  const input = h('input', { type: 'range', min: String(min), max: String(max), step: '1', value: String(value), 'aria-label': label,
+    onpointerdown: () => { holdRender = true; } });
+  input.addEventListener('input', () => onInput(Number(input.value)));
+  input.addEventListener('change', () => onChange(Number(input.value)));
+  return h('label', { class: 'slider' }, h('span', { class: 'slname' }, label), input,
+    h('span', { class: 'slends' }, h('span', null, labels[0]), h('span', null, labels[1])));
+}
+
+// Simple: the few things most people change, in plain words. Everything else is one click away (Advanced).
+function simpleSettings(ui) {
+  const t = ui.theme || T.DEFAULT;
+  const feel = T.feelOf(t);
+  const lockChip = (k, label) => h('button', { class: `lock${shuffleLocks[k] ? ' on' : ''}`, 'aria-pressed': shuffleLocks[k] ? 'true' : 'false',
+    title: shuffleLocks[k] ? `${label} stays when you shuffle` : `Keep the ${label.toLowerCase()} when you shuffle`,
+    onclick: () => { shuffleLocks[k] = !shuffleLocks[k]; render(); } }, shuffleLocks[k] ? `Keep ${label.toLowerCase()} \u2713` : `Keep ${label.toLowerCase()}`);
+  const presetTile = (pr) => {
+    const look = T.LOOKS.find((l) => l.id === pr.look);
+    const aa = h('span', { class: 'paa' }, 'Aa');
+    aa.style.fontFamily = look.font;
+    const on = t.palette === pr.palette && t.look === pr.look;
+    return h('button', { class: `ptile${on ? ' on' : ''}`, title: pr.blurb, ...hoverPreview({ ...t, palette: pr.palette, look: pr.look }),
+      onclick: () => pickTheme({ ...t, palette: pr.palette, look: pr.look }) }, swatchDot(pr, 'pdot'), aa, h('span', { class: 'pname2' }, pr.name));
+  };
+  const zi = Math.max(0, ZOOMS.findIndex(([z]) => z === (ui.zoom || 1)));
+  return [
+    h('section', null, h('div', { class: 'slabel' }, 'Style'),
+      h('div', { class: 'ptiles' }, T.PRESETS.map(presetTile)),
+      h('div', { class: 'btnrow' },
+        h('button', { class: 'b', title: 'A new style that goes well together', onclick: () => pickTheme(T.shuffle(t, shuffleLocks)) }, 'Shuffle'),
+        lockChip('palette', 'Colours'), lockChip('look', 'Font'), lockChip('mode', 'Light/dark')),
+      (ui.canUndoTheme || (ui.recentThemes || []).length > 0) && h('div', { class: 'btnrow recent' },
+        h('button', { class: 'b ghostb', disabled: !ui.canUndoTheme, onclick: () => api.undoTheme() }, 'Undo'),
+        (ui.recentThemes || []).length > 0 && h('span', { class: 'hint' }, 'Recent'),
+        (ui.recentThemes || []).map((r) => h('button', { class: 'recentb', title: themeName(r), 'aria-label': `Back to ${themeName(r)}`,
+          ...hoverPreview(r), onclick: () => pickTheme(r) }, swatchDot(r))))),
+    h('section', null, h('div', { class: 'slabel' }, 'Feel'),
+      FEEL.map(([k, name, lo, hi]) => slider(name, 0, 4, Math.round(feel[k] * 4), [lo, hi],
+        (v) => { const f = { ...feel, [k]: v / 4 }; previewOn(T.fromFeel(f.mood, f.crisp, t)); },
+        (v) => { const f = { ...feel, [k]: v / 4 }; pickTheme(T.fromFeel(f.mood, f.crisp, t)); })),
+      slider('Glass', 0, 3, ui.glass || 0, ['Solid', 'See-through'], (v) => { document.documentElement.dataset.glass = String(v); },
+        (v) => api.set({ glass: v })),
+      slider('Size', 0, 3, zi, ['Small', 'Extra large'], () => {}, (v) => api.set({ zoom: ZOOMS[v][0] })),
+      h('div', { class: 'hint' }, `Size: ${ZOOMS[zi][1]} (${Math.round(ZOOMS[zi][0] * 100)} %)`)),
     h('section', null, h('div', { class: 'slabel' }, 'View'),
       h('div', { class: 'seg' },
         h('button', { class: `segb${!ui.dock && !ui.collapsed ? ' on' : ''}`, onclick: () => api.set({ dock: false, collapsed: false }) }, 'Panel'),
         h('button', { class: `segb${!ui.dock && ui.collapsed ? ' on' : ''}`, onclick: () => api.set({ dock: false, collapsed: true }) }, 'Minimised'),
         h('button', { class: `segb${ui.dock ? ' on' : ''}`, onclick: () => api.set({ dock: true }) }, 'Pet dock'))),
+    h('section', null, h('div', { class: 'slabel' }, 'Alerts'),
+      toggleEl(!ui.muted, 'Chime when a session needs you or finishes', () => api.set({ muted: !ui.muted })),
+      toggleEl(ui.notify !== false, 'Windows notifications', () => api.set({ notify: ui.notify === false }))),
+    h('button', { class: 'b ghostb more', onclick: () => api.set({ settingsAdvanced: true }) }, 'All settings \u2192'),
+  ];
+}
+const toggleEl = (on, label, onclick) => h('button', { class: `toggle${on ? ' on' : ''}`, role: 'switch', 'aria-checked': on ? 'true' : 'false', onclick },
+  h('span', { class: 'knob' }), label);
+
+function settingsDrawer(ui) {
+  const advanced = !!ui.settingsAdvanced;
+  return h('div', { class: 'settings', 'data-scroll': advanced ? 'settings-adv' : 'settings', onmouseleave: previewOff },
+    h('div', { class: 'dheadrow' }, h('h3', { class: 'dhead' }, advanced ? 'All settings' : 'Settings'),
+      advanced && h('button', { class: 'b ghostb', onclick: () => api.set({ settingsAdvanced: false }) }, '\u2190 Simple')),
+    advanced ? advancedSettings(ui) : simpleSettings(ui));
+}
+
+// Advanced: every manual setting, as before, plus size.
+function advancedSettings(ui) {
+  const sideBtn = (side, label) => h('button', { class: `segb${ui.rail === side ? ' on' : ''}`, onclick: () => api.set({ rail: side }) }, label);
+  const toggle = toggleEl;
+  return [
+    h('section', null, h('div', { class: 'slabel' }, 'View'),
+      h('div', { class: 'seg' },
+        h('button', { class: `segb${!ui.dock && !ui.collapsed ? ' on' : ''}`, onclick: () => api.set({ dock: false, collapsed: false }) }, 'Panel'),
+        h('button', { class: `segb${!ui.dock && ui.collapsed ? ' on' : ''}`, onclick: () => api.set({ dock: false, collapsed: true }) }, 'Minimised'),
+        h('button', { class: `segb${ui.dock ? ' on' : ''}`, onclick: () => api.set({ dock: true }) }, 'Pet dock'))),
+    h('section', null, h('div', { class: 'slabel' }, 'Order'),
+      h('div', { class: 'hint' }, 'Drag a card, a pet or a group name to move it. A parent takes its children along.'),
+      ui.ordered && h('div', { class: 'btnrow' },
+        h('button', { class: 'b', onclick: () => api.order({ reset: true }) }, 'Back to automatic order')),
+      ui.ordered && h('div', { class: 'hint' }, 'Automatic: sessions that need you first, then the most recent.')),
     h('section', null, h('div', { class: 'slabel' }, 'Sidebar side'),
       h('div', { class: 'seg' }, sideBtn('left', 'Left'), sideBtn('right', 'Right'), sideBtn('top', 'Top'), sideBtn('bottom', 'Bottom')),
       h('div', { class: 'hint' }, 'Or drag the dots at the end of the sidebar to any side.')),
@@ -616,18 +705,30 @@ function settingsDrawer(ui) {
       ui.startup == null
         ? h('div', { class: 'hint' }, 'Start with Windows and updates work in the installed app (this copy runs from source).')
         : toggle(!!ui.startup, 'Start with Windows', () => api.set({ startup: !ui.startup })),
+      ui.dev
+        ? h('div', { class: 'hint' }, 'Dev copy: debug log is always on.')
+        : toggle(!!ui.debug, 'Debug log', () => api.set({ debug: !ui.debug })),
+      !ui.dev && h('div', { class: 'hint' }, 'Adds event names and timings to a log file on this PC, for bug reports. No prompts or file contents; nothing is sent.'),
       h('div', { class: 'btnrow' },
         ui.updates && h('button', { class: 'b', onclick: () => api.checkUpdates() }, 'Check for updates'),
         h('span', { class: 'hint' }, `Flocklet ${ui.version || ''}`))),
-    h('section', null, h('div', { class: 'slabel' }, 'Pet dock'),
+    h('section', null, h('div', { class: 'slabel' }, 'Pets and dock'),
       toggle(!!ui.dockNames, 'Names under the pets', () => api.set({ dockNames: !ui.dockNames })),
+      toggle(ui.emotes !== false, 'Busy pets do little emotes', () => api.set({ emotes: ui.emotes === false })),
       h('div', { class: 'hint' }, 'Pets are grouped like the panel (Projects / Groups / All). Right-click the dock for more.')),
     h('section', null, h('div', { class: 'slabel' }, 'Size'),
+      h('div', { class: 'seg' }, ZOOMS.map(([z, name]) =>
+        h('button', { class: `segb${(ui.zoom || 1) === z ? ' on' : ''}`, onclick: () => api.set({ zoom: z }) }, name))),
       h('div', { class: 'btnrow' },
         h('button', { class: 'b', onclick: () => api.drag('right', 'reset', 0, 0) }, 'Reset width'),
         h('button', { class: 'b', onclick: () => api.drag('bottom', 'reset', 0, 0) }, 'Automatic height')),
       h('div', { class: 'hint' }, 'Drag the panel edges to resize; double-click an edge to reset it.')),
-    h('section', null, h('div', { class: 'slabel' }, 'Look'), themer(ui)));
+    h('section', null, h('div', { class: 'slabel' }, 'Look'), themer(ui)),
+    h('section', null, h('div', { class: 'slabel' }, 'Glass'),
+      h('div', { class: 'seg' }, GLASS.map((name, i) =>
+        h('button', { class: `segb${(ui.glass || 0) === i ? ' on' : ''}`, onclick: () => api.set({ glass: i }) }, name))),
+      h('div', { class: 'hint' }, 'How much of your desktop shows through the panel.')),
+  ];
 }
 function renderShell(cards, ui) {
   const shell = document.getElementById('shell');
@@ -635,7 +736,7 @@ function renderShell(cards, ui) {
   shell.className = `shell side-${side}${ui.dock ? ' docked' : ui.collapsed ? ' minimised' : ''}${ui.drawer && !ui.dock ? ' open' : ''}`;
   document.body.classList.toggle('docked', !!ui.dock);
   shell.style.setProperty('--deckw', `${ui.width || 368}px`);
-  if (ui.deckHeight != null) shell.style.setProperty('--deckh', `${ui.deckHeight - 16}px`); else shell.style.removeProperty('--deckh');
+  if (ui.deckHeight != null) shell.style.setProperty('--deckh', `${ui.deckHeight - 24}px`); else shell.style.removeProperty('--deckh');
   const rail = document.getElementById('rail');
   rail.classList.toggle('min', !!ui.railMin);
   shell.classList.toggle('railmin', !!ui.railMin);
@@ -695,6 +796,7 @@ function renderShell(cards, ui) {
 
 // ---------- render ----------
 function render() {
+  if (holdRender || carryHold) { renderMissed = true; return; }
   const { cards, ui, hooks } = state;
   const panel = document.getElementById('panel');
   const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.focus : null;
@@ -702,13 +804,12 @@ function render() {
   panel.className = `panel${ui.dock ? ' dock' : ui.collapsed ? ' collapsed' : ''}${ui.fixedHeight ? ' fixed' : ''}`;
   applyTheme(ui);
   const kids = ui.dock ? dockView(cards, ui).filter(Boolean) : [header(state)];
-  if (ui.dock) { /* pet dock: nothing else */ } else if (ui.collapsed) kids.push(miniBar(cards, state.usage));
+  if (ui.dock) { /* pet dock: nothing else */ } else if (ui.collapsed) kids.push(miniBar(cards));
   if (ui.collapsed && !ui.dock) kids.push(miniList(cards, ui.miniList)); // always built, so its full height can be measured
-  if (!ui.collapsed && !ui.dock && state.usage) kids.push(usageRow(state.usage));
   if (!ui.collapsed && !ui.dock) {
     if (!hooks.ok) kids.push(h('div', { class: 'banner' }, `Live updates off: ${hooks.error}. Showing session list only.`));
     const active = cards.filter((c) => c.group === 'active');
-    const items = G.fold(G.arrange(active, ui.groupBy, { all: cards, groups: ui.groups }), ui.folded);
+    const items = G.fold(G.arrange(active, ui.groupBy, { all: cards, groups: ui.groups, folderOrder: ui.folderOrder }), ui.folded);
     kids.push(h('div', { class: 'list', 'data-scroll': 'deck' }, items.length
       ? items.map((it) => (it.type === 'header' ? groupHeader(it) : withPetMenu(it.type === 'ghost' ? ghostRow(it.card, it.depth, it) : card(it.card, it.depth, it), it.card, it.depth, 'deck')))
       : h('div', { class: 'empty' }, 'No agent is working right now. Pin sessions from Sessions in the sidebar to keep them here.')));
@@ -720,6 +821,7 @@ function render() {
   for (const el of document.querySelectorAll('[data-scroll]')) {
     if (scrolls.has(el.dataset.scroll)) el.scrollTop = scrolls.get(el.dataset.scroll);
   }
+  if (afterRender) { const f = afterRender; afterRender = null; f(); }
   const live = new Set(cards.map((c) => c.waiting && c.waiting.id).filter(Boolean));
   for (const id of drafts.keys()) if (!live.has(id)) drafts.delete(id);
   const want = focusAfterRender || focused;
@@ -838,7 +940,7 @@ function reportSize() {
   }
   const ps = getComputedStyle(panel);
   height += ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'].reduce((s, k) => s + parseFloat(ps[k]), 0);
-  const total = Math.ceil(height) + 16; // + panel margin
+  const total = Math.ceil(height) + 24; // + shell margins: 8 above, 16 below (room for the shadow)
   const mini = panel.querySelector('.minilist');
   const bar = mini && !mini.classList.contains('off') ? total - listFull : total;
   const dockbar = panel.querySelector('.dockbar');

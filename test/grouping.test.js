@@ -90,3 +90,39 @@ test('stateCounts: every listed session by state, unknown states count as idle',
   assert.deepEqual(G.stateCounts(cards), { waiting: 1, error: 1, working: 1, done: 1, idle: 2 });
   assert.deepEqual(G.STATE_ORDER, ['waiting', 'error', 'working', 'done', 'idle'], 'needs-you states first');
 });
+
+test('your order: placed cards keep their place, new ones come first in the store order', () => {
+  const cards = [card('n1'), card('a'), card('b'), card('n2'), card('c')];
+  const out = G.applyOrder(cards, ['c', 'a', 'b']);
+  assert.deepEqual(out.map((c) => c.key), ['n1', 'n2', 'c', 'a', 'b']);
+  assert.deepEqual(out.map((c) => !!c.ordered), [false, false, true, true, true]);
+  assert.equal(G.applyOrder(cards, []), cards, 'no order: untouched');
+});
+
+test('a drop rewrites one section as a block, the rest of the saved order stays', () => {
+  assert.deepEqual(G.placeBlock(['x', 'a', 'y', 'b'], ['b', 'a']), ['x', 'b', 'a', 'y']);
+  assert.deepEqual(G.placeBlock(['x'], ['p', 'q']), ['p', 'q', 'x'], 'unknown keys go in front');
+  const cards = [card('a'), card('x'), card('b'), card('c')];
+  assert.deepEqual(G.reorderBlock(cards, ['c', 'a', 'b']).map((c) => c.key), ['c', 'x', 'a', 'b'], 'keys take the places they had');
+});
+
+test('moveUnit: an item moves with its children, only to a sibling spot', () => {
+  const items = [{ key: 'a', depth: 0 }, { key: 'a1', depth: 1 }, { key: 'a2', depth: 1 }, { key: 'b', depth: 0 }, { key: 'c', depth: 0 }];
+  const keys = (l) => l.map((x) => x.key);
+  assert.equal(G.unitEnd(items, 0), 3);
+  assert.deepEqual(keys(G.moveUnit(items, 0, 5)), ['b', 'c', 'a', 'a1', 'a2'], 'parent to the end, children along');
+  assert.deepEqual(keys(G.moveUnit(items, 4, 0)), ['c', 'a', 'a1', 'a2', 'b']);
+  assert.deepEqual(keys(G.moveUnit(items, 2, 1)), ['a', 'a2', 'a1', 'b', 'c'], 'children swap under their parent');
+  assert.deepEqual(keys(G.moveUnit(items, 0, 2)), keys(items), 'inside itself: no move');
+});
+
+test('a placed tree keeps its spot even when a child needs you; projects follow your folder order', () => {
+  const kid = card('kid', { parentHostId: 'mom', state: 'waiting', group: 'active' });
+  const all = G.applyOrder([kid, card('solo', { group: 'active' }), card('mom', { group: 'active' })], ['solo', 'mom', 'kid']);
+  assert.deepEqual(shape(G.arrange(all, 'tree', { all })), ['solo', 'mom', '  kid']);
+  const auto = [kid, card('solo', { group: 'active' }), card('mom', { group: 'active' })];
+  assert.deepEqual(shape(G.arrange(auto, 'tree', { all: auto })), ['mom', '  kid', 'solo'], 'unplaced: the urgent tree first');
+  const two = [card('p', { cwd: 'C:/one' }), card('q', { cwd: 'C:/two' })];
+  assert.deepEqual(shape(G.arrange(two, 'folder', { folderOrder: ['c:/two', 'c:/one'] })), ['# two (1)', 'q', '# one (1)', 'p']);
+  assert.deepEqual(shape(G.arrange(two, 'folder')), ['# one (1)', 'p', '# two (1)', 'q'], 'no folder order: as they appear');
+});

@@ -71,3 +71,13 @@ test('shellRect: the sidebar minimises on its own and keeps room beside a short 
   assert.deepEqual(S.shellRect(bar, 'left', true, true), { x: 978, y: 200, width: 390, height: 90, offX: 22, offY: 0 }, 'thin strip, no drawer');
   assert.deepEqual(S.shellRect(bar, 'top', false, true), { x: 1000, y: 178, width: 368, height: 112, offX: 0, offY: 22 });
 });
+
+test('zoom scales the rail and drawer around the deck; unknown zooms fall back to 100 %', () => {
+  const deck = { x: 500, y: 100, width: 460, height: 300 };
+  const r1 = S.shellRect(deck, 'left', false, false, 1);
+  const r2 = S.shellRect(deck, 'left', false, false, 1.5);
+  assert.equal(r2.offX, Math.round(1.5 * (S.RAIL + S.GAP)));
+  assert.ok(r2.width > r1.width);
+  assert.equal(S.clampZoom(1.25), 1.25);
+  assert.equal(S.clampZoom(3), 1);
+});

@@ -23,8 +23,11 @@ const EVENTS = [
 
 const TOKEN_HEADER = 'X-AgentDeck-Token';
 
-const isOurs = (group) => (group.hooks || []).some(
-  (h) => h && h.type === 'http' && h.headers && TOKEN_HEADER in h.headers);
+// A prod copy (port 4777) and a dev copy (4778) can run side by side: each only touches the hooks that point at
+// its own port, so one quitting never cuts the other off. Without a port: every Flocklet hook (old behaviour).
+const hookUrl = (port) => `http://127.0.0.1:${port}/hook`;
+const isOurs = (group, port = null) => (group.hooks || []).some(
+  (h) => h && h.type === 'http' && h.headers && TOKEN_HEADER in h.headers && (port == null || h.url === hookUrl(port)));
 
 function readSettings(file) {
   if (!fs.existsSync(file)) return {};
@@ -44,12 +47,12 @@ function writeSettings(file, data, backupDir) {
   fs.renameSync(tmp, file);
 }
 
-function stripOurs(data) {
+function stripOurs(data, port = null) {
   const hooks = data.hooks || {};
   let removed = 0;
   for (const ev of Object.keys(hooks)) {
     if (!Array.isArray(hooks[ev])) continue;
-    const kept = hooks[ev].filter((g) => !isOurs(g));
+    const kept = hooks[ev].filter((g) => !isOurs(g, port));
     removed += hooks[ev].length - kept.length;
     if (kept.length) hooks[ev] = kept; else delete hooks[ev];
   }
@@ -57,27 +60,29 @@ function stripOurs(data) {
   return removed;
 }
 
-function installHooks({ settingsFile, port, token, backupDir }) {
+// observe: every event except PermissionRequest, so this copy can never hold Claude up (the dev copy).
+function installHooks({ settingsFile, port, token, backupDir, observe = false }) {
   const data = readSettings(settingsFile);
-  stripOurs(data);
+  stripOurs(data, port);
   data.hooks = data.hooks || {};
-  const url = `http://127.0.0.1:${port}/hook`;
+  const url = hookUrl(port);
   for (const [ev, matcher, timeout] of EVENTS) {
+    if (observe && ev === 'PermissionRequest') continue;
     const group = { hooks: [{ type: 'http', url, headers: { [TOKEN_HEADER]: token }, timeout }] };
     (data.hooks[ev] = data.hooks[ev] || []).push(matcher ? { matcher, ...group } : group);
   }
   writeSettings(settingsFile, data, backupDir);
 }
 
-function uninstallHooks({ settingsFile, backupDir }) {
+function uninstallHooks({ settingsFile, backupDir, port = null }) {
   const data = readSettings(settingsFile);
-  if (stripOurs(data) > 0) writeSettings(settingsFile, data, backupDir);
+  if (stripOurs(data, port) > 0) writeSettings(settingsFile, data, backupDir);
 }
 
-function hooksInstalled(settingsFile) {
+function hooksInstalled(settingsFile, port = null) {
   try {
     const hooks = readSettings(settingsFile).hooks || {};
-    return Object.values(hooks).some((groups) => Array.isArray(groups) && groups.some(isOurs));
+    return Object.values(hooks).some((groups) => Array.isArray(groups) && groups.some((g) => isOurs(g, port)));
   } catch { return false; }
 }
 

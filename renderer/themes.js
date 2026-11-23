@@ -62,7 +62,62 @@
 
   const presetOf = (t) => PRESETS.find((p) => t && p.palette === t.palette && p.look === t.look) || null;
 
-  const api = { PALETTES, LOOKS, MODES, PRESETS, DEFAULT, normalizeTheme, resolveMode, presetOf };
+  // ---------- feel: two plain sliders and a shuffle that leans toward good pairs ----------
+  // mood: 0 calm .. 1 playful. crisp: 0 soft .. 1 crisp (contrast, hard edges). Hand-scored.
+  const TRAITS = {
+    graphite: { mood: 0.1, crisp: 0.5 }, campfire: { mood: 0.5, crisp: 0.5 }, 'crimson-hour': { mood: 0.6, crisp: 0.8 },
+    'midnight-plum': { mood: 0.7, crisp: 0.6 }, lagoon: { mood: 0.4, crisp: 0.45 }, concrete: { mood: 0.45, crisp: 0.9 },
+    marshmallow: { mood: 0.75, crisp: 0.25 }, phosphor: { mood: 0.75, crisp: 0.95 },
+    studio: { mood: 0.1, crisp: 0.5 }, shell: { mood: 0.3, crisp: 0.8 }, puff: { mood: 0.7, crisp: 0.15 },
+    pocket: { mood: 0.75, crisp: 0.6 }, arcade: { mood: 0.95, crisp: 0.9 }, tube: { mood: 0.85, crisp: 0.7 },
+  };
+  const isPreset = (pal, look) => PRESETS.some((p) => p.palette === pal && p.look === look);
+  // How well a palette and a look go together: same mood and edge, and a bonus for the hand-made presets.
+  function pairScore(pal, look) {
+    const a = TRAITS[pal], b = TRAITS[look];
+    return 1 - Math.abs(a.mood - b.mood) * 0.7 - Math.abs(a.crisp - b.crisp) * 0.5 + (isPreset(pal, look) ? 0.6 : 0);
+  }
+  // Where the sliders sit for a theme (rounded to the 5 stops 0, .25, .5, .75, 1).
+  const stop = (v) => Math.round(v * 4) / 4;
+  function feelOf(t) {
+    const n = normalizeTheme(t);
+    return { mood: stop((TRAITS[n.palette].mood + TRAITS[n.look].mood) / 2), crisp: stop((TRAITS[n.palette].crisp + TRAITS[n.look].crisp) / 2) };
+  }
+  // The best pair for a slider position: close to the target, and a good pair. Light / dark stays as it is.
+  function fromFeel(mood, crisp, current) {
+    const cur = normalizeTheme(current);
+    let best = null;
+    for (const p of PALETTES) for (const l of LOOKS) {
+      const m = (TRAITS[p.id].mood + TRAITS[l.id].mood) / 2, c = (TRAITS[p.id].crisp + TRAITS[l.id].crisp) / 2;
+      const score = -Math.hypot(m - mood, c - crisp) * 3 + pairScore(p.id, l.id) * 0.35;
+      if (!best || score > best.score) best = { score, palette: p.id, look: l.id };
+    }
+    return { ...cur, palette: best.palette, look: best.look };
+  }
+  // Shuffle: a weighted pick over every allowed pair (good pairs much more likely), never the one you have.
+  // locks: { palette, look, mode } true = keep that part.
+  function shuffle(current, locks = {}, rnd = Math.random) {
+    const cur = normalizeTheme(current);
+    const pairs = [];
+    for (const p of PALETTES) for (const l of LOOKS) {
+      if (locks.palette && p.id !== cur.palette) continue;
+      if (locks.look && l.id !== cur.look) continue;
+      if (p.id === cur.palette && l.id === cur.look) continue;
+      pairs.push({ palette: p.id, look: l.id, w: Math.max(0.05, pairScore(p.id, l.id)) ** 3 });
+    }
+    let mode = cur.mode;
+    if (!locks.mode) {
+      const r = rnd();
+      mode = r < 0.55 ? 'windows' : r < 0.85 ? 'palette' : r < 0.93 ? 'dark' : 'light';
+    }
+    if (!pairs.length) return { ...cur, mode }; // both parts locked: only light / dark can change
+    let x = rnd() * pairs.reduce((sum, q) => sum + q.w, 0);
+    for (const q of pairs) { x -= q.w; if (x <= 0) return { palette: q.palette, look: q.look, mode }; }
+    const last = pairs[pairs.length - 1];
+    return { palette: last.palette, look: last.look, mode };
+  }
+
+  const api = { PALETTES, LOOKS, MODES, PRESETS, DEFAULT, TRAITS, normalizeTheme, resolveMode, presetOf, pairScore, feelOf, fromFeel, shuffle };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FlockletThemes = api;
 })(typeof window !== 'undefined' ? window : this);

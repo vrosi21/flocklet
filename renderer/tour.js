@@ -78,8 +78,6 @@ function demoHeader(collapsed) {
   return h('header', { class: 'header' }, logo, h('span', { class: 'title' }, 'Flocklet'), !collapsed && h('span', { class: 'count' }, '3'),
     h('span', { class: 'spacer' }), ib(ui.muted ? 'mute' : 'sound'), ib('dock'), ib(collapsed ? 'down' : 'up'), ib('minimise'));
 }
-const demoMeter = (cls, label, v) => h('div', { class: cls }, h('span', { class: 'mlabel' }, label),
-  h('span', { class: 'bar' }, h('i', { style: `--p:${v / 100}` })), h('span', { class: 'mval' }, `${v}%`));
 function demoRail() {
   const rb = (name, badge) => h('span', { class: 'rbtn' }, icon(name), badge && h('span', { class: 'rbadge' }, badge));
   return h('nav', { class: 'rail pane' }, rb('list', '4'), h('span', { class: 'spacer' }), rb('gear'), ib('minimise', 'ib small rmin'), h('div', { class: 'rgrip' }, icon('grip')));
@@ -90,19 +88,17 @@ function demoView(view) {
     const bubble = { waiting: '!', done: '✓' };
     const dpet = (d) => h('span', { class: `dpet ${d.state}`, style: slot(d.slot) },
       bubble[d.state] && h('span', { class: `bubble ${d.state}` }, bubble[d.state]),
-      h('span', { class: 'dpetimg' }, pet(d.pet, PET_STATE[d.state]), h('span', { class: `ddot ${d.state}` })));
+      h('span', { class: 'dpetimg' }, pet(d.pet, PET_STATE[d.state])), h('span', { class: `dbar ${d.state}` }));
     return h('div', { class: 'shell docked vshell' }, h('div', { class: 'panel dock' },
       h('div', { class: 'dockbar' }, h('div', { class: 'dgroup plain' }, h('div', { class: 'dpets' }, DEMO.map(dpet))),
-        h('span', { class: 'dsep' }), h('div', { class: 'dend' }, ib('minimise', 'ib small'), chickSvg('dlogo')))));
+        h('div', { class: 'dend' }, ib('expand', 'ib small'), ib('minimise', 'ib small')))));
   }
   const panel = view === 'mini'
     ? h('div', { class: 'panel collapsed' }, demoHeader(true),
       h('div', { class: 'minibar' },
         h('div', { class: 'chips' }, h('span', { class: 'chip waiting' }, h('b', null, '1'), ' needs you'),
-          h('span', { class: 'chip working' }, h('b', null, '1'), ' working'), h('span', { class: 'chip done' }, h('b', null, '1'), ' done')),
-        h('div', { class: 'mmeters' }, demoMeter('mmeter', '5h', 42), demoMeter('mmeter', 'wk', 18))))
+          h('span', { class: 'chip working' }, h('b', null, '1'), ' working'), h('span', { class: 'chip done' }, h('b', null, '1'), ' done'))))
     : h('div', { class: 'panel' }, demoHeader(false),
-      h('div', { class: 'usage' }, h('div', { class: 'meters' }, demoMeter('meter', '5h', 42), demoMeter('meter', 'Week', 18), ib('refresh', 'ib small'))),
       h('div', { class: 'list' }, DEMO.slice(0, 3).map(demoCard)));
   return h('div', { class: `shell side-${side}${view === 'mini' ? ' minimised' : ''} vshell` }, demoRail(), panel);
 }
@@ -230,7 +226,7 @@ const PAGE = {
     const view = viewPick || using;
     const VIEWS = [
       ['panel', 'Panel', 'Every card with its details. The sidebar holds all sessions and Settings.', { dock: false, collapsed: false }],
-      ['mini', 'Minimised', 'One slim bar: who needs you, who is working, and your usage.', { dock: false, collapsed: true }],
+      ['mini', 'Minimised', 'One slim bar: who needs you and who is working.', { dock: false, collapsed: true }],
       ['dock', 'Pet dock', 'Only the pets, like a taskbar. A bubble pops up when one needs you.', { dock: true }],
     ];
     const cur = VIEWS.find((v) => v[0] === view);

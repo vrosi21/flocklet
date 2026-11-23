@@ -1,1 +1,8 @@
-- **Fix: "Restart now" could close Flocklet without updating.** Right after Windows starts, the silent update could fail without a word. Flocklet now waits until your PC has settled before it checks for updates, and if an update still doesn't install, the next try shows the installer so you can see what happens.
+- **Drag to arrange.** Pick up a card, a pet or a whole group and drop it where you want it. While you carry a card it folds into its pet, which dangles from the pointer; a parent takes its children along. Your order stays (Settings → All settings → Order brings back the automatic one).
+- **Pets got livelier.** Busy pets now and then do a little emote (a hop, a heart, a tune, a twirl, a stretch, sparkles), and the pointer turns into a paw over a pet.
+- **New pet dock.** Clearer and calmer: a short colour bar under each pet shows its state, group names sit above their pets, and the end has "open panel" and "hide" buttons.
+- **Easier settings.** A simple page with ready-made styles, Shuffle (it favours combinations that look good, and you can keep colours, font or light/dark), Undo, your recent styles, and live preview when you hover a style. Everything else is under "All settings".
+- **Size for every eye.** Small, Normal, Large and Extra large make the whole app bigger or smaller.
+- **Soft float and Glass.** Panels now float with a soft shadow. A new Glass setting (Off to Strong) lets the desktop show through, with a glassy rim and sheen.
+- **Usage meters removed.** When a session runs out of usage, its pet naps until your limit resets.
+- **Debug log (off by default).** Turn it on in All settings → App for bug reports. It records event names and timings only, never prompts or file contents, and nothing is sent.

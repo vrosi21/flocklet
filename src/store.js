@@ -11,7 +11,8 @@
 const { describeTool, describePermission, clip } = require('./describe');
 const { permissionSuggestions, questionsOf } = require('./decisions');
 
-const FORGET_MS = 10 * 60e3;     // sessions gone from the registry are dropped after this
+const FORGET_MS = 10 * 60e3;
+const LIMIT_RE = /rate.?limit|usage.?limit|limit (reached|resets)|out of (extra )?usage|quota|max_tokens_per|overloaded_limit/i;     // sessions gone from the registry are dropped after this
 
 function blank(id) {
   return {
@@ -249,7 +250,7 @@ class SessionStore {
       case 'UserPromptSubmit':
         this._removeWaits(r, () => true);
         Object.assign(r, { state: 'working', turnStartedAt: at, activity: 'Thinking…', plan: null,
-          lastMessage: null, error: null, onDeck: true });
+          lastMessage: null, error: null, limited: false, onDeck: true });
         break;
 
       case 'PreToolUse': {
@@ -309,11 +310,14 @@ class SessionStore {
         if (r.plan) r.plan.items.forEach((i) => { i.status = 'completed'; });
         break;
 
-      case 'StopFailure':
+      case 'StopFailure': {
         this._removeWaits(r, () => true);
-        Object.assign(r, { state: 'error', doneAt: at, activity: null, onDeck: true,
-          error: clip(ev.error || 'stopped with an error', 120) });
+        // Out of usage (rate or plan limit) is not a real error: the pet naps until the limit resets.
+        const limited = LIMIT_RE.test([ev.error, ev.error_details, ev.last_assistant_message].filter(Boolean).join(' '));
+        Object.assign(r, { state: 'error', doneAt: at, activity: null, onDeck: true, limited,
+          error: limited ? 'Out of usage' : clip(ev.error || 'stopped with an error', 120) });
         break;
+      }
 
       case 'SubagentStart': r.subagents += 1; break;
       case 'SubagentStop': r.subagents = Math.max(0, r.subagents - 1); break;
@@ -391,6 +395,7 @@ class SessionStore {
         moreWaiting: Math.max(0, r.waits.length - 1),
         lastMessage: r.lastMessage,
         error: r.error,
+        limited: !!r.limited && r.state === 'error',
         since: r.state === 'working' || r.state === 'waiting' ? (w ? w.since : r.turnStartedAt) : r.doneAt,
         subagents: r.subagents,
         context: r.context,

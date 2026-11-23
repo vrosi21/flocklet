@@ -11,7 +11,6 @@ const { startHookServer } = require('./hookServer');
 const { installHooks, uninstallHooks } = require('./hooksConfig');
 const { Broker } = require('./broker');
 const { buildDecision } = require('./decisions');
-const { watchUsage, readUsage, findProfileDir } = require('./usage');
 const { watchDesktopSessions } = require('./desktopSessions');
 const Grouping = require('../renderer/grouping');
 const Themes = require('../renderer/themes');
@@ -22,14 +21,29 @@ const { transitions } = require('./notify');
 const { readContext } = require('./context');
 
 const Release = require('./release');
-// Settings folder first: everything below (log, config, single-instance lock) uses it.
-app.setPath('userData', Release.settingsDir(app.getPath('appData')));
-Release.migrateSettings(app.getPath('appData'));
 const INSTALLED = Release.isInstalled(app);
+// A copy run from source is the dev copy. It runs next to the installed (prod) one: own settings folder (so its
+// own single-instance lock), own port, and hooks that watch but never answer permissions (prod keeps doing that).
+const DEV = !INSTALLED;
+// --bg: for automated tests. Windows are fully transparent and click-through, nothing takes focus, no tray icon,
+// no notifications, no hotkey. Screenshots over the debugging port still work.
+const BG = DEV && (process.argv.includes('--bg') || process.env.FLOCKLET_BG === '1');
+// An invisible window counts as covered, and Chromium stops painting it: keep painting for screenshots.
+if (BG) {
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
+  app.commandLine.appendSwitch('disable-background-timer-throttling');
+}
+// Settings folder first: everything below (log, config, single-instance lock) uses it.
+if (DEV) app.setPath('userData', path.join(app.getPath('appData'), 'Flocklet Dev'));
+else {
+  app.setPath('userData', Release.settingsDir(app.getPath('appData')));
+  Release.migrateSettings(app.getPath('appData'));
+}
 const AUMID = INSTALLED ? Release.APP_ID : Release.DEV_AUMID;
 let updates = { enabled: false, check() {}, ready: () => null, install() {} };
 
-const PORT = 4777;
+const PORT = DEV ? 4778 : 4777;
 const PanelSize = require('./panelSize');
 const DRAWERS = ['sessions', 'settings'];
 const HOTKEY = 'Control+Alt+A';
@@ -46,9 +60,7 @@ let store = null;
 let broker = null;
 let server = null;
 let stopRegistry = null;
-let stopUsage = null;
 let stopDesktop = null;
-let usage = null;       // from Claude desktop's own usage history file; Flocklet never calls Anthropic
 let hooks = { ok: false, error: 'starting' };
 let quitting = false;
 let cleanedUp = false;
@@ -66,6 +78,10 @@ function log(...parts) {
   try { fs.appendFileSync(userFile('agentdeck.log'), line); } catch { /* ignore */ }
 }
 
+// Debug log: extra lines in agentdeck.log (event and tool names, short session ids, timings, update steps).
+// Never prompts, commands, file contents or the token; never sent anywhere. Always on in the dev copy.
+function dlog(...parts) { if (cfg && cfg.debug) log('dbg', ...parts); }
+
 function loadConfig() {
   let c = {};
   try { c = JSON.parse(fs.readFileSync(userFile('config.json'), 'utf8').replace(/^﻿/, '')); } catch { /* first run */ }
@@ -77,10 +93,22 @@ function loadConfig() {
   if (!Array.isArray(c.pins)) c.pins = [];
   if (!Array.isArray(c.groups)) c.groups = [];
   if (!c.groupOf || typeof c.groupOf !== 'object') c.groupOf = {};
+  const strings = (v, n) => (Array.isArray(v) ? v.filter((k) => typeof k === 'string').slice(0, n) : []);
+  c.order = strings(c.order, 2000); // session keys in the order you dragged them (renderer/carry.js)
+  c.folderOrder = strings(c.folderOrder, 200); // project folders in the order you dragged them
+  if (typeof c.emotes !== 'boolean') c.emotes = true; // busy pets now and then do something cute
   if (typeof c.notify !== 'boolean') c.notify = true;
   if (!Array.isArray(c.quiet)) c.quiet = [];
   if (!Array.isArray(c.folded)) c.folded = [];
   if (typeof c.tourSeen !== 'string') c.tourSeen = null;
+  c.zoom = PanelSize.clampZoom(c.zoom);
+  const themes = (v, n) => (Array.isArray(v) ? v.filter((t) => t && typeof t === 'object').map(Themes.normalizeTheme).slice(-n) : []);
+  c.themeUndo = themes(c.themeUndo, 20); // styles before each change, newest last
+  c.recentThemes = themes(c.recentThemes, 5); // the last styles you used, newest first
+  if (typeof c.settingsAdvanced !== 'boolean') c.settingsAdvanced = false;
+  if (![0, 1, 2, 3].includes(c.glass)) c.glass = 0; // Settings → Glass: 0 solid .. 3 strong
+  if (typeof c.debug !== 'boolean') c.debug = false;
+  if (DEV) c.debug = true;
   if (typeof c.updateTried !== 'string') c.updateTried = null; // version "Restart now" last tried to install
   c.width = PanelSize.clampWidth(c.width);
   c.maxHeight = PanelSize.clampCap(c.maxHeight, 10000);
@@ -107,7 +135,7 @@ function saveConfig() {
 function ensureHooks() {
   if (!server) return;
   try {
-    installHooks({ settingsFile: SETTINGS_FILE, port: PORT, token: cfg.token, backupDir: userFile('backups') });
+    installHooks({ settingsFile: SETTINGS_FILE, port: PORT, token: cfg.token, backupDir: userFile('backups'), observe: DEV });
     hooks = { ok: true, error: null };
   } catch (e) {
     hooks = { ok: false, error: `could not update settings.json (${e.message})` };
@@ -121,10 +149,9 @@ function cleanup() {
   cleanedUp = true;
   // Sync on purpose: also runs from process 'exit' and Windows session-end.
   try { if (broker) broker.releaseAll(); } catch { /* sockets already gone */ }
-  try { uninstallHooks({ settingsFile: SETTINGS_FILE, backupDir: userFile('backups') }); } catch (e) { console.error(e); }
+  try { uninstallHooks({ settingsFile: SETTINGS_FILE, backupDir: userFile('backups'), port: PORT }); } catch (e) { console.error(e); }
   try { if (server) server.close(); } catch { /* already closed */ }
   if (stopRegistry) stopRegistry();
-  if (stopUsage) stopUsage();
   if (stopDesktop) stopDesktop();
   globalShortcut.unregisterAll();
 }
@@ -137,7 +164,7 @@ function pushState() {
     pushTimer = null;
     if (!store) return;
     const snap = store.snapshot();
-    snap.cards = Grouping.decorate(snap.cards, cfg);
+    snap.cards = Grouping.applyOrder(Grouping.decorate(snap.cards, cfg), cfg.order);
     snap.counts = Grouping.count(snap.cards);
     const quiet = new Set(cfg.quiet);
     for (const c of snap.cards) {
@@ -158,10 +185,10 @@ function pushState() {
       win.webContents.send('state', {
         ...snap,
         ui: { muted: cfg.muted, collapsed: cfg.collapsed, showIdle: cfg.showIdle, rail: cfg.rail, drawer: cfg.drawer, notify: cfg.notify, dock: cfg.dock, startup: INSTALLED ? cfg.startup : null,
-          version: app.getVersion(), updates: updates.enabled, railMin: cfg.railMin, dockNames: cfg.dockNames, width: cfg.width, deckHeight: cfg.collapsed ? null : cfg.maxHeight, groupBy: cfg.groupBy, groups: cfg.groups, folded: cfg.folded, miniList: cfg.miniList || miniDragging, fixedHeight: cfg.dock ? false : cfg.collapsed ? miniDragging : cfg.maxHeight != null,
+          version: app.getVersion(), updates: updates.enabled, debug: cfg.debug, dev: DEV, zoom: cfg.zoom,
+          glass: cfg.glass, canUndoTheme: cfg.themeUndo.length > 0, recentThemes: cfg.recentThemes, settingsAdvanced: cfg.settingsAdvanced, railMin: cfg.railMin, dockNames: cfg.dockNames, width: cfg.width, deckHeight: cfg.collapsed ? null : cfg.maxHeight, groupBy: cfg.groupBy, groups: cfg.groups, folded: cfg.folded, folderOrder: cfg.folderOrder, ordered: cfg.order.length > 0 || cfg.folderOrder.length > 0, emotes: cfg.emotes, miniList: cfg.miniList || miniDragging, fixedHeight: cfg.dock ? false : cfg.collapsed ? miniDragging : cfg.maxHeight != null,
           theme: cfg.theme, mode: Themes.resolveMode(cfg.theme, nativeTheme.shouldUseDarkColors) },
         hooks,
-        usage: currentUsage(),
       });
       if (CAPTURE_FILE) scheduleCapture();
     }
@@ -182,6 +209,7 @@ function loadDeck() {
 
 // ---------- notifications ----------
 function showToast(n) {
+  if (BG) return;
   if (!Notification.isSupported()) return;
   const t = new Notification({ title: n.title, body: n.body, silent: true, icon: chickIcon(null, 64) }); // the panel plays its own chime
   t.on('click', () => {
@@ -201,7 +229,7 @@ function showToast(n) {
 // The installer makes that shortcut for the installed app; a copy run from source makes its own,
 // "Flocklet (dev)", so the two never fight over one shortcut. Its file name is the toast sender name.
 function ensureStartMenuShortcut() {
-  if (process.platform !== 'win32' || INSTALLED) return;
+  if (process.platform !== 'win32' || INSTALLED || BG) return;
   const dir = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs');
   const lnk = path.join(dir, 'Flocklet (dev).lnk');
   // Prefer the branded copy of electron.exe (made by `npm run brand`): it carries the chick icon and
@@ -260,11 +288,6 @@ function refreshContext(onlyId) {
   }
 }
 
-// Claude desktop's own reading of its local usage history file. No login, no network.
-function currentUsage() {
-  return usage ? { ...usage, source: 'claude-app' } : null;
-}
-
 let captureTimer = null;
 function scheduleCapture() {
   clearTimeout(captureTimer);
@@ -279,22 +302,30 @@ function onSomeScreen(pos) {
     pos.x >= a.x - 40 && pos.x <= a.x + a.width - 80 && pos.y >= a.y - 10 && pos.y <= a.y + a.height - 40);
 }
 
+function hideForTests(w) {
+  if (!BG) return;
+  w.setOpacity(0);
+  w.setIgnoreMouseEvents(true);
+  w.setFocusable(false);
+}
+
 function createWindow() {
   const wa = screen.getPrimaryDisplay().workArea;
-  const pos = onSomeScreen(cfg.pos) ? cfg.pos : { x: wa.x + wa.width - cfg.width - 12, y: wa.y + 12 };
+  const pos = onSomeScreen(cfg.pos) ? cfg.pos : { x: wa.x + wa.width - Math.round(cfg.width * Z()) - 12, y: wa.y + 12 };
   win = new BrowserWindow({
-    x: pos.x, y: pos.y, width: cfg.width, height: 90,
+    x: pos.x, y: pos.y, width: Math.round(cfg.width * Z()), height: 90,
     frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false,
     resizable: false, maximizable: false, minimizable: false, fullscreenable: false,
     skipTaskbar: true, alwaysOnTop: true, show: false, title: 'Flocklet',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, nodeIntegration: false, sandbox: true,
-      autoplayPolicy: 'no-user-gesture-required', spellcheck: false,
+      autoplayPolicy: 'no-user-gesture-required', spellcheck: false, backgroundThrottling: !BG,
     },
   });
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  hideForTests(win);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.on('moved', () => { const [x, y] = win.getPosition(); cfg.pos = { x: x + off.x, y: y + off.y }; saveConfig(); }); // the deck's spot
@@ -304,6 +335,7 @@ function createWindow() {
   win.on('hide', rebuildTrayMenu);
   win.once('ready-to-show', revealWindow);
   win.webContents.once('did-finish-load', () => setTimeout(() => { if (!win.isVisible()) revealWindow(); }, 500));
+  win.webContents.on('did-finish-load', () => win.webContents.setZoomFactor(Z()));
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 }
 
@@ -341,7 +373,7 @@ function updateTray() {
   const c = lastCounts;
   tray.setImage(chickIcon(c.waiting ? '#f5b942' : c.working ? '#ef7d52' : null));
   const parts = [c.working && `${c.working} working`, c.waiting && `${c.waiting} waiting`, c.done && `${c.done} done`].filter(Boolean);
-  tray.setToolTip(`Flocklet: ${parts.join(' · ') || 'all quiet'}`);
+  tray.setToolTip(`${DEV ? 'Flocklet (dev)' : 'Flocklet'}: ${parts.join(' · ') || 'all quiet'}`);
 }
 
 function rebuildTrayMenu() {
@@ -379,7 +411,7 @@ function openTour(force) {
   if (plan.mode === 'none') return;
   if (tourWin && !tourWin.isDestroyed()) { tourWin.show(); tourWin.focus(); return; }
   const area = screen.getDisplayMatching(win && !win.isDestroyed() ? win.getBounds() : screen.getPrimaryDisplay().bounds).workArea;
-  const W = 640, H = 580;
+  const W = Math.min(px(640), area.width - 16), H = Math.min(px(580), area.height - 16); // page 640 × 580 at the chosen zoom
   tourWin = new BrowserWindow({
     x: Math.round(area.x + (area.width - W) / 2), y: Math.round(area.y + (area.height - H) / 2), width: W, height: H,
     frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: false,
@@ -387,10 +419,12 @@ function openTour(force) {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
   });
   tourWin.setAlwaysOnTop(true, 'screen-saver');
+  hideForTests(tourWin);
   tourWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   tourWin.webContents.on('will-navigate', (e) => e.preventDefault());
-  tourWin.once('ready-to-show', () => { tourWin.show(); tourWin.focus(); });
+  tourWin.once('ready-to-show', () => { if (BG) tourWin.showInactive(); else { tourWin.show(); tourWin.focus(); } });
   tourWin.on('closed', () => { tourWin = null; });
+  tourWin.webContents.on('did-finish-load', () => tourWin && tourWin.webContents.setZoomFactor(Z()));
   tourWin.loadFile(path.join(__dirname, '..', 'renderer', 'tour.html'),
     { query: { mode: plan.mode, seen: cfg.tourSeen || '', version: app.getVersion() } });
   log('tour', { mode: plan.mode, pages: plan.pages.length });
@@ -438,6 +472,7 @@ function themeMenu() {
 }
 
 function createTray() {
+  if (BG) return;
   tray = new Tray(chickIcon());
   tray.on('click', toggleWindow);
   rebuildTrayMenu();
@@ -447,7 +482,10 @@ function createTray() {
 // ---------- IPC from the overlay ----------
 ipcMain.on('ui:ready', () => pushState());
 // The overlay reports its content height; the window follows it, under your max height and the screen.
-let contentHeight = 90;
+let contentHeight = 90; // screen pixels (the page reports page pixels; × zoom)
+// The page is zoomed (Settings → Size). Stored sizes (width, height cap) are page pixels; the window is screen pixels.
+const Z = () => (cfg && cfg.zoom) || 1;
+const px = (v) => Math.round(v * Z());
 let drag = null; // {edge, start} while you drag a grab strip
 let dragWatchdog = null;
 // The window = deck (the panel) + rail + open drawer. `deck` is where the panel sits on screen;
@@ -464,12 +502,12 @@ let miniDragging = false;
 
 function deckNow() {
   const b = win.getBounds();
-  return deck ? { ...deck, x: b.x + off.x, y: b.y + off.y } : { x: b.x, y: b.y, width: cfg.width, height: b.height };
+  return deck ? { ...deck, x: b.x + off.x, y: b.y + off.y } : { x: b.x, y: b.y, width: px(cfg.width), height: b.height };
 }
 // Place the window around a deck rect, kept on screen (the whole shell shifts if it would leave it).
 function applyDeck(d) {
   const wa = screen.getDisplayMatching(win.getBounds()).workArea;
-  const r = PanelSize.shellRect(d, railSide(), drawerOpen(), cfg.railMin);
+  const r = PanelSize.shellRect(d, railSide(), drawerOpen(), cfg.railMin, Z());
   const x = Math.max(wa.x, Math.min(r.x, wa.x + wa.width - r.width));
   const y = Math.max(wa.y, Math.min(r.y, wa.y + wa.height - r.height));
   off = { x: r.offX, y: r.offY };
@@ -480,7 +518,7 @@ function applyDeck(d) {
 function extraY() {
   const side = railSide();
   if (side !== 'top' && side !== 'bottom') return 0;
-  return (cfg.railMin ? PanelSize.RAIL_MIN : PanelSize.RAIL) + PanelSize.GAP + (drawerOpen() ? PanelSize.DRAWER_H + PanelSize.GAP : 0);
+  return px((cfg.railMin ? PanelSize.RAIL_MIN : PanelSize.RAIL) + PanelSize.GAP + (drawerOpen() ? PanelSize.DRAWER_H + PanelSize.GAP : 0));
 }
 function endDrag() {
   clearTimeout(dragWatchdog);
@@ -507,15 +545,16 @@ function fitWindow() {
     return;
   }
   dockAnchored = false;
-  const height = PanelSize.windowHeight(contentHeight, cfg.collapsed ? null : cfg.maxHeight, wa.height - 24 - extraY());
-  applyDeck({ ...deckNow(), width: cfg.width, height });
+  const cap = cfg.collapsed || cfg.maxHeight == null ? null : px(cfg.maxHeight);
+  const height = PanelSize.windowHeight(contentHeight, cap, wa.height - 24 - extraY());
+  applyDeck({ ...deckNow(), width: px(cfg.width), height });
 }
 ipcMain.on('ui:resize', (_e, h, stops) => {
-  contentHeight = Number(h) || contentHeight;
+  if (Number(h) > 0) contentHeight = px(Number(h));
   const bar = Number(stops && stops.bar), full = Number(stops && stops.full);
   const dw = Number(stops && stops.dockW);
-  if (dw > 0) dockWidth = Math.round(dw);
-  if (bar > 0 && full >= bar) miniStops = { bar: Math.round(bar), full: Math.round(full) };
+  if (dw > 0) dockWidth = px(dw);
+  if (bar > 0 && full >= bar) miniStops = { bar: px(bar), full: px(full) };
   fitWindow();
 });
 
@@ -529,19 +568,24 @@ ipcMain.on('ui:drag', (_e, edge, phase, dx, dy) => {
     const now = deckNow();
     // First stretch: fix the height at the current size, so the panel follows the pointer from here.
     if (tall && cfg.collapsed) { miniDragging = true; pushState(); } // show the rows while you drag
-    if (tall && !cfg.collapsed && cfg.maxHeight == null) { cfg.maxHeight = now.height; pushState(); }
+    if (tall && !cfg.collapsed && cfg.maxHeight == null) { cfg.maxHeight = Math.round(now.height / Z()); pushState(); }
     drag = { edge, start: { ...now, cap: cfg.collapsed ? null : cfg.maxHeight } };
     dragWatchdog = setTimeout(endDrag, 15e3);
   } else if (phase === 'move' && drag && drag.edge === edge) {
     dragWatchdog = setTimeout(endDrag, 15e3); // a lost release never leaves the window stuck
     const d = (v) => Math.max(-5000, Math.min(5000, Number(v) || 0));
-    const r = PanelSize.dragTo(drag.start, edge, d(dx), d(dy), wa.height - 24 - extraY());
+    // Drag maths in page pixels (what the sizes are stored in), placed on screen × zoom.
+    // dx/dy come from screenX/Y, which are screen pixels whatever the zoom.
+    const z = Z();
+    const s = drag.start;
+    const r = PanelSize.dragTo({ x: 0, width: s.width / z, height: s.height / z, cap: s.cap }, edge, d(dx) / z, d(dy) / z,
+      (wa.height - 24 - extraY()) / z);
     const tall = edge.startsWith('bottom');
     cfg.width = r.width;
-    let height = drag.start.height;
-    if (tall && cfg.collapsed) height = Math.max(PanelSize.MINI_MIN, Math.min(drag.start.height + d(dy), wa.height - 24));
-    else if (tall) height = cfg.maxHeight = r.cap;
-    applyDeck({ x: r.x, y: drag.start.y, width: r.width, height });
+    let height = s.height;
+    if (tall && cfg.collapsed) height = Math.max(px(PanelSize.MINI_MIN), Math.min(s.height + d(dy), wa.height - 24));
+    else if (tall) { cfg.maxHeight = r.cap; height = px(r.cap); }
+    applyDeck({ x: Math.round(s.x + r.x * z), y: s.y, width: px(r.width), height });
   } else if (phase === 'end' && drag) {
     endDrag();
   } else if (phase === 'reset') {
@@ -581,7 +625,13 @@ ipcMain.on('ui:fold', (_e, key, folded) => {
 });
 
 ipcMain.on('ui:set', (_e, patch) => {
-  for (const k of ['muted', 'collapsed', 'showIdle', 'notify', 'dock', 'railMin', 'dockNames']) if (typeof patch?.[k] === 'boolean') cfg[k] = patch[k];
+  for (const k of ['muted', 'collapsed', 'showIdle', 'notify', 'dock', 'railMin', 'dockNames', 'settingsAdvanced', 'emotes']) if (typeof patch?.[k] === 'boolean') cfg[k] = patch[k];
+  if ([0, 1, 2, 3].includes(patch?.glass)) cfg.glass = patch.glass;
+  if (PanelSize.ZOOMS.includes(patch?.zoom) && patch.zoom !== cfg.zoom) {
+    cfg.zoom = patch.zoom;
+    for (const w of [win, tourWin]) if (w && !w.isDestroyed()) w.webContents.setZoomFactor(cfg.zoom);
+  }
+  if (typeof patch?.debug === 'boolean' && !DEV) { cfg.debug = patch.debug; log('debug log', cfg.debug ? 'on' : 'off'); }
   if (patch && ('dock' in patch || 'collapsed' in patch)) rebuildTrayMenu();
   if (patch && 'notify' in patch) rebuildTrayMenu();
   if (PanelSize.SIDES.includes(patch?.rail)) cfg.rail = patch.rail;
@@ -594,12 +644,23 @@ ipcMain.on('ui:set', (_e, patch) => {
   fitWindow(); // rail side / drawer change the window around the deck
 });
 
-function setTheme(partial) {
-  cfg.theme = Themes.normalizeTheme({ ...cfg.theme, ...partial });
+const sameTheme = (a, b) => a.palette === b.palette && a.look === b.look && a.mode === b.mode;
+// Every style change can be undone, and the last few styles stay one click away.
+function setTheme(partial, { undo = false } = {}) {
+  const prev = cfg.theme;
+  const next = Themes.normalizeTheme({ ...cfg.theme, ...partial });
+  if (sameTheme(prev, next)) return;
+  if (!undo) cfg.themeUndo = [...cfg.themeUndo, prev].slice(-20);
+  cfg.recentThemes = [prev, ...cfg.recentThemes.filter((t) => !sameTheme(t, prev))].filter((t) => !sameTheme(t, next)).slice(0, 5);
+  cfg.theme = next;
   saveConfig();
   rebuildTrayMenu(); // keep the tray's radio marks in step with the panel picker
   pushState();
 }
+ipcMain.on('ui:undoTheme', () => {
+  const prev = cfg.themeUndo.pop();
+  if (prev) setTheme(prev, { undo: true });
+});
 ipcMain.on('ui:hide', () => { if (win) win.hide(); });
 // Pins and custom groups are keyed by the desktop session id (stable across restarts).
 const KEY_RE = /^[A-Za-z0-9_-]{1,80}$/;
@@ -650,6 +711,24 @@ ipcMain.on('ui:group', (_e, op) => {
   saveConfig();
   pushState();
 });
+// Drag and drop: one section's cards in their new order, the project folders, or your groups (renderer/carry.js).
+ipcMain.on('ui:order', (_e, op) => {
+  if (!op || typeof op !== 'object') return;
+  if (op.reset === true) { cfg.order = []; cfg.folderOrder = []; }
+  if (Array.isArray(op.cards) && op.cards.length <= 500 && op.cards.every((k) => typeof k === 'string' && KEY_RE.test(k))) {
+    cfg.order = Grouping.placeBlock(cfg.order, [...new Set(op.cards)]).slice(0, 2000);
+  }
+  if (Array.isArray(op.folders) && op.folders.length <= 200 && op.folders.every((k) => typeof k === 'string' && k.length <= 400)) {
+    cfg.folderOrder = [...new Set(op.folders)];
+  }
+  if (Array.isArray(op.groups)) {
+    const byId = new Map(cfg.groups.map((g) => [g.id, g]));
+    const ids = [...new Set(op.groups.filter((id) => byId.has(id)))];
+    cfg.groups = [...ids.map((id) => byId.get(id)), ...cfg.groups.filter((g) => !ids.includes(g.id))];
+  }
+  saveConfig();
+  pushState();
+});
 ipcMain.on('ui:quiet', (_e, key, on) => {
   if (typeof key !== 'string' || !KEY_RE.test(key)) return;
   cfg.quiet = cfg.quiet.filter((k) => k !== key);
@@ -657,8 +736,6 @@ ipcMain.on('ui:quiet', (_e, key, on) => {
   saveConfig();
   pushState();
 });
-// ↻ re-reads Claude's local usage history file at once. It never calls Anthropic.
-ipcMain.on('ui:refreshUsage', () => { usage = readUsage(findProfileDir()); pushState(); });
 ipcMain.on('ui:checkUpdates', () => updates.check());
 
 // ---------- lifecycle ----------
@@ -688,6 +765,8 @@ if (!app.requestSingleInstanceLock()) {
       server = await startHookServer({
         port: PORT, token: cfg.token,
         onEvent: (ev, reply) => {
+          dlog('hook', { e: ev.hook_event_name, tool: ev.tool_name || undefined, sid: String(ev.session_id || '').slice(0, 8),
+            agent: ev.agent_id ? 'sub' : undefined, t: ev.notification_type || undefined });
           if (ev.hook_event_name === 'PermissionRequest' && ev.session_id) {
             store.applyHook(ev, { requestId: broker.hold(ev, reply) });
             return true; // answered later from the panel, or released when Claude moves on
@@ -708,9 +787,8 @@ if (!app.requestSingleInstanceLock()) {
     ensureHooks();
     log('hooks', hooks);
     stopRegistry = watchRegistry(SESSIONS_DIR, (list) => store.applyRegistry(list));
-    stopUsage = watchUsage((u) => { usage = u; pushState(); });
     stopDesktop = watchDesktopSessions((list) => store.applyDesktop(list));
-    if (!globalShortcut.register(HOTKEY, toggleWindow)) console.warn(`hotkey ${HOTKEY} unavailable`);
+    if (!DEV && !globalShortcut.register(HOTKEY, toggleWindow)) console.warn(`hotkey ${HOTKEY} unavailable`);
     nativeTheme.on('updated', () => { if (cfg.theme.mode === 'windows') pushState(); });
     setInterval(pushState, 30e3); // re-ages readings and timers
     setInterval(() => refreshContext(), 15e3);
@@ -721,6 +799,7 @@ if (!app.requestSingleInstanceLock()) {
     updates = Release.initUpdates({ // installed app: "Update ready" dialog + notification + tray item
       app, dialog, log, getWindow: () => win, onReady: () => rebuildTrayMenu(),
       memo: { get: () => cfg.updateTried || null, set: (v) => { cfg.updateTried = v; saveConfig(); } },
+      debug: () => cfg.debug, logFile: userFile('agentdeck.log'),
       notify: (title, body, onClick) => {
         if (!Notification.isSupported()) return;
         const t = new Notification({ title, body, icon: chickIcon(null, 64) });

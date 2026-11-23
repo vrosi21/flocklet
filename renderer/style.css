@@ -15,16 +15,20 @@ html, body {
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 button:disabled { opacity: 0.3; cursor: default; }
 
+/* Soft float: no border, rounder, a soft shadow that lifts the deck off the desktop. The shell's bottom
+   margin is deeper than the others (--pad-y) so the shadow is never cut off by the window edge. */
+:root { --pad-y: 24px; --float: 0 10px 18px -10px rgba(0, 0, 0, 0.55), 0 2px 5px rgba(0, 0, 0, 0.2); }
+[data-mode="light"] { --float: 0 10px 18px -10px rgba(20, 24, 40, 0.35), 0 2px 5px rgba(20, 24, 40, 0.12); }
 .panel {
   position: relative;
   isolation: isolate;
-  max-height: calc(100vh - 16px);
+  max-height: calc(100vh - var(--pad-y));
   display: flex;
   flex-direction: column;
   background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  box-shadow: 0 4px 8px var(--shadow);
+  border: 0;
+  border-radius: calc(var(--radius-panel) + 4px);
+  box-shadow: var(--float), inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent);
   overflow: hidden;
 }
 /* Look pattern: a layer in the palette's ink, cut out by the look's mask. */
@@ -99,30 +103,14 @@ button:disabled { opacity: 0.3; cursor: default; }
 .lookchip .aa { font-size: 13px; color: var(--accent); }
 .themer .seg { align-self: flex-start; }
 
-/* ---------- usage meters ---------- */
-.usage { margin: -2px 12px 8px; font-size: 11px; flex: none; }
-.meters { display: flex; align-items: center; gap: 12px; }
-.unudge { margin-top: 4px; color: var(--warn); font-size: 11px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.unudge .pill { margin-top: 0; }
 .uinfo { margin-top: 3px; color: var(--muted); font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .countdown { font-variant-numeric: tabular-nums; }
 .ib.small { width: 22px; height: 22px; flex: none; }
 .ib.small .ic, .ib.small .ic svg { width: 13px; height: 13px; }
 .ib.spin .ic { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.meter { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; }
-.mlabel { color: var(--muted); font-weight: 600; }
-.mval { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 28px; text-align: right; }
-.meter .bar { min-width: 30px; }
-.meter .bar > i { background: var(--ok); }
-.meter.warm .bar > i { background: var(--warn); }
-.meter.warm .mval { color: var(--warn); }
-.meter.hot .bar > i { background: var(--err); }
-.meter.hot .mval { color: var(--err); }
-.meter.none .mval { color: var(--muted); }
-.mage { color: var(--muted); font-size: 10.5px; white-space: nowrap; }
-.usage.stale .meter { opacity: 0.55; }
-.usage.stale .mage { color: var(--warn); }
+
+.line2.tired { color: var(--muted); font-weight: 600; }
 
 .banner {
   margin: 0 8px 6px;
@@ -497,18 +485,6 @@ input.text:focus { border-color: var(--accent); }
 .chip.waiting b { color: inherit; }
 .chip.error { background: var(--err); color: var(--accent-ink); font-weight: 700; }
 .chip.error b { color: inherit; }
-.mmeters { display: flex; flex-direction: column; gap: 2px; flex: none; font-size: 10.5px; }
-.mmeters.stale { opacity: 0.55; }
-.mmeter { display: flex; align-items: center; gap: 4px; }
-.mmeter .mlabel { width: 16px; color: var(--muted); }
-.mmeter .bar { width: 38px; flex: none; height: 3px; }
-.mmeter .bar > i { background: var(--ok); }
-.mmeter.warm .bar > i { background: var(--warn); }
-.mmeter.warm .mval { color: var(--warn); }
-.mmeter.hot .bar > i { background: var(--err); }
-.mmeter.hot .mval { color: var(--err); }
-.mmeter .mval { width: 28px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
-.mmeter .mreset { color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ---------- resize strips (in the 8px margin around the panel) ---------- */
 .rz {
@@ -541,7 +517,7 @@ input.text:focus { border-color: var(--accent); }
 .mrow.error { background: color-mix(in srgb, var(--err) 14%, transparent); }
 
 /* Height set with the bottom edge: the panel fills the window, the list takes the rest and scrolls. */
-.panel.fixed { height: min(var(--deckh, 100vh), calc(100vh - 16px)); }
+.panel.fixed { height: min(var(--deckh, 100vh), calc(100vh - var(--pad-y))); }
 .panel.fixed > .list { flex: 1 1 0; }
 
 /* ---------- pet menu (click a pet or colour square) ---------- */
@@ -570,7 +546,7 @@ button.mini.pickable:hover { outline: 2px solid color-mix(in srgb, var(--pc) 55%
 
 /* ---------- shell: deck + sidebar rail + drawer ---------- */
 /* The window is sized by main (src/panelSize.js shellRect): RAIL 40, GAP 6, drawer 300 wide / 320 tall. */
-.shell { position: fixed; inset: 0; padding: 8px; box-sizing: border-box; display: flex; gap: 6px; align-items: flex-start; }
+.shell { position: fixed; inset: 0; padding: 8px 8px 16px; box-sizing: border-box; display: flex; gap: 6px; align-items: flex-start; }
 .shell > .panel { flex: 0 0 auto; min-width: 0; }
 .shell.side-left, .shell.side-right { flex-direction: row; }
 .shell.side-left > .panel, .shell.side-right > .panel { width: calc(var(--deckw) - 16px); }
@@ -587,8 +563,40 @@ button.mini.pickable:hover { outline: 2px solid color-mix(in srgb, var(--pc) 55%
 .shell.minimised > .panel { width: auto; flex: 1 1 auto; }
 
 .pane {
-  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-panel);
-  box-shadow: 0 4px 8px var(--shadow);
+  background: var(--bg); border: 0; border-radius: calc(var(--radius-panel) + 4px);
+  box-shadow: var(--float), inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+/* ---------- glass (Settings: Glass) ----------
+   Only the opacity is a choice; the finish comes with it: a bright rim, a sheen from the top, a soft glow
+   along the bottom, and cards that sit like thicker glass. The desktop shows through (Windows cannot blur
+   it behind this kind of window). */
+[data-glass="1"] { --glass-a: 90%; --glass-card: 94%; }
+[data-glass="2"] { --glass-a: 78%; --glass-card: 86%; }
+[data-glass="3"] { --glass-a: 64%; --glass-card: 76%; }
+[data-glass]:not([data-glass="0"]) {
+  --rim-hi: rgba(255, 255, 255, 0.68); --rim-lo: rgba(255, 255, 255, 0.07); --rim-back: rgba(255, 255, 255, 0.28);
+  --shine: rgba(255, 255, 255, 0.17); --glow: rgba(255, 255, 255, 0.26);
+}
+[data-glass]:not([data-glass="0"])[data-mode="light"] {
+  --rim-hi: rgba(255, 255, 255, 0.95); --rim-lo: rgba(255, 255, 255, 0.35); --rim-back: rgba(255, 255, 255, 0.7);
+  --shine: rgba(255, 255, 255, 0.5); --glow: rgba(255, 255, 255, 0.6);
+}
+/* the rim is a gradient border (bright where light hits: top-left, again bottom-right), the fill is see-through */
+[data-glass]:not([data-glass="0"]) .panel,
+[data-glass]:not([data-glass="0"]) .pane {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(155deg, var(--shine) 0%, transparent 34%) padding-box,
+    linear-gradient(color-mix(in srgb, var(--bg) var(--glass-a), transparent), color-mix(in srgb, var(--bg) var(--glass-a), transparent)) padding-box,
+    linear-gradient(150deg, var(--rim-hi), var(--rim-lo) 38%, var(--rim-lo) 62%, var(--rim-back)) border-box;
+  box-shadow: var(--float), inset 0 -16px 22px -20px var(--glow);
+}
+[data-glass]:not([data-glass="0"]) .card {
+  background:
+    radial-gradient(120% 80% at 8% 0%, var(--shine), transparent 60%),
+    color-mix(in srgb, var(--card) var(--glass-card), transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 16%, transparent), inset 0 -1px 0 color-mix(in srgb, #000 10%, transparent), 0 1px 3px rgba(0, 0, 0, 0.14);
 }
 .rail { flex: none; display: flex; align-items: center; gap: 4px; padding: 6px 0; }
 .side-left > .rail, .side-right > .rail { width: 40px; align-self: stretch; flex-direction: column; box-sizing: border-box; }
@@ -639,6 +647,31 @@ button.mini.pickable:hover { outline: 2px solid color-mix(in srgb, var(--pc) 55%
 .toggle.on .knob { background: var(--accent); }
 .toggle.on .knob::after { transform: translateX(11px); background: var(--accent-ink); }
 .settings .themer { margin: 0; padding: 0; border: 0; background: none; }
+/* simple settings */
+.dheadrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dheadrow .dhead { margin: 0; }
+.ptiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.ptile { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; align-items: center; column-gap: 6px;
+  padding: 6px 7px; border-radius: var(--radius); background: var(--card); border: 1.5px solid transparent; text-align: left; min-width: 0; }
+.ptile:hover { background: var(--card-hi); }
+.ptile.on { border-color: var(--accent); }
+.ptile .pdot { grid-row: 1; }
+.ptile .pname2 { grid-column: 1 / -1; margin-top: 3px; }
+.paa { font-size: 14px; line-height: 16px; color: var(--accent); }
+.pname2 { font-size: 11px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pdot, .sdot { display: inline-block; width: 20px; height: 20px; border-radius: 50%; flex: none;
+  background: linear-gradient(135deg, var(--s-bg) 0 50%, var(--s-acc) 50% 100%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent); }
+.sdot { width: 16px; height: 16px; }
+.lock { height: 24px; padding: 0 8px; border-radius: 12px; font-size: 11px; color: var(--muted); background: var(--hover); }
+.lock.on { color: var(--text); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.recentb { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; }
+.recentb:hover { background: var(--hover); }
+.b[disabled] { opacity: 0.45; cursor: default; }
+.slider { display: grid; grid-template-columns: 1fr; gap: 2px; font-size: 11.5px; color: var(--text-2); }
+.slider .slname { font-weight: 600; }
+.slider input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; -webkit-app-region: no-drag; }
+.slends { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); }
+.settings .more { align-self: flex-start; }
 
 /* ---------- minimised: compact rail, snapping list, row actions ---------- */
 .panel.collapsed .minilist { overflow: hidden; } /* never a scroll bar: the height snaps instead */
@@ -653,38 +686,40 @@ button.mini.pickable:hover { outline: 2px solid color-mix(in srgb, var(--pc) 55%
 .docked .rz { display: none; }
 .panel.dock { border-radius: calc(var(--radius-panel) + 4px); }
 .dockbar {
-  display: flex; align-items: flex-end; gap: 4px; width: max-content;
-  padding: 20px 8px 6px; /* room above the pets for speech bubbles */
+  display: flex; align-items: flex-end; width: max-content;
+  padding: 14px 10px 8px; /* room above the pets for speech bubbles */
   -webkit-app-region: drag; /* move the dock by its background */
 }
 .dockbar button { -webkit-app-region: no-drag; }
-.dpet { position: relative; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex: none; }
+/* one pet = one tile; its state is the short bar under it (and a bubble when something happened) */
+.dpet { position: relative; width: 44px; height: 44px; border-radius: 12px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; flex: none; }
 .dpet:hover, .dpet.on { background: var(--hover); }
-.dpet .pet { width: 34px; height: 34px; align-self: center; }
-.dpet.waiting { background: color-mix(in srgb, var(--warn) 16%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--warn) 70%, transparent); }
-.dpet.error { background: color-mix(in srgb, var(--err) 14%, transparent); }
-.ddot { position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); border: 1.5px solid var(--bg); opacity: 0.8; }
-.ddot.working { background: var(--accent); opacity: 1; }
-.ddot.waiting { background: var(--warn); opacity: 1; }
-.ddot.done { background: var(--ok); opacity: 1; }
-.ddot.error { background: var(--err); opacity: 1; }
+.dpet.on { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.dpet .pet { width: 32px; height: 32px; }
+.dpet.waiting { background: color-mix(in srgb, var(--warn) 16%, transparent); }
+.dpet.error { background: color-mix(in srgb, var(--err) 12%, transparent); }
+.dpet.error.limited { background: none; }
+.dbar { position: absolute; left: 13px; right: 13px; bottom: 3px; height: 3px; border-radius: 2px; background: transparent; }
+.dbar.working { background: var(--accent); }
+.dbar.waiting { background: var(--warn); }
+.dbar.done { background: var(--ok); }
+.dbar.error { background: var(--err); }
+.dbar.limited { background: var(--muted); }
 .bubble {
-  position: absolute; left: 22px; bottom: 30px; z-index: 2;
+  position: absolute; right: -6px; top: -9px; z-index: 2;
   min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px;
   font: 800 11px/18px var(--font-body); text-align: center;
   background: var(--warn); color: var(--accent-ink); box-shadow: 0 2px 4px var(--shadow);
   animation: bubblepop 0.25s ease-out;
 }
-.bubble::after { content: ""; position: absolute; left: 3px; bottom: -4px; border: 4px solid transparent; border-top-color: inherit; border-top-color: var(--bubble, var(--warn)); border-bottom: 0; }
+.bubble::after { content: ""; position: absolute; left: 4px; bottom: -4px; border: 4px solid transparent; border-top-color: var(--bubble, var(--warn)); border-bottom: 0; }
 .bubble.done { background: var(--ok); --bubble: var(--ok); }
 .bubble.error { background: var(--err); --bubble: var(--err); }
+.bubble.limited { background: var(--hover-2); color: var(--text); --bubble: var(--hover-2); }
 @keyframes bubblepop { from { transform: scale(0.4) translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
-.dsep { width: 1px; height: 28px; margin: 0 4px 7px; background: var(--line); flex: none; }
-.dlogo { width: 30px; height: 30px; margin-bottom: 6px; flex: none; --pc: var(--chick-body); opacity: 0.85; }
-.dlogo:hover { opacity: 1; transform: scale(1.08); }
-.dlogo svg { width: 100%; height: 100%; }
-.dmore { height: 28px; margin-bottom: 7px; padding: 0 8px; border-radius: 14px; background: var(--hover); color: var(--text-2); font-size: 11px; font-weight: 700; flex: none; }
-.dempty { color: var(--muted); font-size: 12px; padding: 0 6px 12px; }
+.dmore { align-self: center; height: 28px; margin-left: 6px; padding: 0 9px; border-radius: 14px; background: var(--hover); color: var(--text-2); font-size: 11px; font-weight: 700; flex: none; }
+.dempty { align-self: center; color: var(--muted); font-size: 12px; padding: 0 8px; }
 .dockpop { width: 340px; padding: 8px 8px 0; box-sizing: border-box; }
 
 /* ---------- sidebar minimised on its own (independent of the panel) ---------- */
@@ -697,33 +732,125 @@ button.mini.pickable:hover { outline: 2px solid color-mix(in srgb, var(--pc) 55%
 .rail .rmin:hover { opacity: 1; }
 
 /* ---------- pet dock: groups, names, stacks ---------- */
-.dgroup { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 0 3px; border-radius: 12px; flex: none; }
-.dgroup:not(.plain) { background: color-mix(in srgb, var(--gc, var(--text)) 5%, transparent); }
-.dgroup + .dgroup { margin-left: 4px; }
-.dpets { display: flex; align-items: flex-end; gap: 2px; }
+/* a group = its name above, its pets below; groups are split by a hairline, not boxed */
+.dgroup { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; flex: none; }
+.dgroup + .dgroup, .dmore + .dend, .dgroup + .dend, .dempty + .dend { margin-left: 10px; padding-left: 10px; border-left: 1px solid var(--line); }
+.dpets { display: flex; align-items: flex-end; gap: 4px; }
 .dglabel {
-  max-width: 100%; padding: 0 4px; font-size: 9px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
-  color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 13px;
+  max-width: 100%; padding: 0 4px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
+  color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 12px; text-align: left;
 }
-.dglabel:hover { color: var(--text); }
-.dpet { display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.dpetimg { position: relative; width: 34px; height: 34px; display: grid; place-items: center; }
-.dpetimg .ddot { right: -1px; bottom: -1px; }
-.dpet.named { width: 54px; height: 54px; gap: 1px; }
-.dname { max-width: 52px; font-size: 9px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 11px; }
-.dpet.named .bubble { left: 30px; bottom: 40px; }
-.dstack { position: relative; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex: none; -webkit-app-region: no-drag; }
+.dglabel:hover { filter: brightness(1.3); }
+.dgroup.folded .dglabel::after { content: " \25B8"; }
+.dpetimg { position: relative; width: 32px; height: 32px; display: grid; place-items: center; }
+.dpet.named { width: 62px; height: 60px; gap: 2px; justify-content: flex-start; padding-top: 6px; box-sizing: border-box; }
+.dname { max-width: 56px; font-size: 10px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 12px; }
+.dpet.named .dbar { bottom: 2px; }
+.dstack { position: relative; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; flex: none; -webkit-app-region: no-drag; }
 .dstack:hover { background: var(--hover); }
 .dstack .pet { width: 30px; height: 30px; filter: drop-shadow(4px -3px 0 color-mix(in srgb, var(--pc) 35%, transparent)); }
 .dcount { position: absolute; right: 1px; bottom: 1px; min-width: 16px; height: 16px; padding: 0 3px; box-sizing: border-box; border-radius: 8px;
   background: var(--hover-2); color: var(--text); font-size: 9.5px; font-weight: 800; line-height: 16px; text-align: center; }
-.dend { display: flex; align-items: flex-end; gap: 2px; margin-bottom: 6px; }
-.dend .dlogo { margin-bottom: 0; }
+/* the end: open the full panel, or hide to the tray */
+.dend { display: flex; flex-direction: column; justify-content: center; gap: 2px; align-self: stretch; flex: none; }
+.dend .ib { width: 26px; height: 21px; }
 
 /* ---------- minimised bar: refresh + as tall as the sidebar beside it ---------- */
-.minibar .mrefresh { flex: none; width: 22px; height: 22px; align-self: center; }
 /* beside a full left/right sidebar the window is the sidebar's height (RAIL_MIN_H): the bar fills it too */
 /* (stats-only mode; with the session list on, the bar is taller than the sidebar anyway). A min-height, not a
    stretch: a stretched bar would measure as tall as the window, and the window could never shrink back. */
 .shell.minimised:not(.railmin).side-left > .panel:has(> .minilist.off),
-.shell.minimised:not(.railmin).side-right > .panel:has(> .minilist.off) { min-height: 92px; justify-content: space-between; } /* RAIL_MIN_H 108 - 16 */
+.shell.minimised:not(.railmin).side-right > .panel:has(> .minilist.off) { min-height: 84px; justify-content: space-between; } /* RAIL_MIN_H 108 - 24 */
+
+/* ---------- emotes: a busy pet now and then does something cute (app.js, EMOTES) ---------- */
+.emo-heart, .emo-note { display: none; }
+.p-heart { fill: #ff6f91; }
+.p-note { fill: var(--accent); }
+.p-notel { fill: none; stroke: var(--accent); stroke-width: 1.3; stroke-linecap: round; }
+.emo-heart, .emo-note { transform-box: fill-box; transform-origin: 50% 100%; }
+.pet[data-emote] .pet-svg { transform-origin: 50% 100%; }
+.pet[data-emote="hop"] .pet-svg { animation: emo-hop 1.1s ease-out var(--eage, 0s) both; }
+.pet[data-emote="twirl"] .pet-svg { animation: emo-twirl 1.1s ease-in-out var(--eage, 0s) both; }
+.pet[data-emote="stretch"] .pet-svg { animation: emo-stretch 1.4s ease-in-out var(--eage, 0s) both; }
+.pet[data-emote="heart"] .emo-heart { display: inline; animation: emo-rise 1.5s ease-out var(--eage, 0s) both; }
+.pet[data-emote="heart"] .pet-svg { animation: emo-squish 0.7s ease-out var(--eage, 0s) both; }
+.pet[data-emote="note"] .emo-note { display: inline; animation: emo-tune 1.5s ease-out var(--eage, 0s) both; }
+.pet[data-emote="note"] .pet-svg { animation: emo-sway 1.5s ease-in-out var(--eage, 0s) both; }
+.pet[data-emote="sparkle"] .spark { display: inline; animation: pet-twinkle 0.5s ease-in-out var(--eage, 0s) 3; }
+/* a happy face for the heart, the sparkles and the hop */
+.pet:is([data-emote="heart"], [data-emote="sparkle"], [data-emote="hop"]) :is(.eyes-open, .eyes-focus, .eyes-closed, .eyes-swirl) { display: none; }
+.pet:is([data-emote="heart"], [data-emote="sparkle"], [data-emote="hop"]) .eyes-happy { display: inline; }
+@keyframes emo-hop {
+  0%, 100% { transform: none; }
+  12% { transform: scale(1.1, 0.86); }
+  30% { transform: translateY(-7px) scale(0.94, 1.08); }
+  46% { transform: scale(1.08, 0.9); }
+  60% { transform: translateY(-3.5px); }
+  74% { transform: scale(1.04, 0.96); }
+}
+@keyframes emo-twirl { 0%, 100% { transform: none; } 15% { transform: translateY(-2px); } 70% { transform: perspective(80px) rotateY(360deg) translateY(-3px); } }
+@keyframes emo-stretch { 0%, 100% { transform: none; } 30% { transform: scale(1.12, 0.86); } 62% { transform: scale(0.92, 1.12); } 82% { transform: scale(1.03, 0.97); } }
+@keyframes emo-squish { 0%, 100% { transform: none; } 30% { transform: scale(1.08, 0.9); } 60% { transform: scale(0.97, 1.04); } }
+@keyframes emo-sway { 0%, 100% { transform: none; } 25% { transform: rotate(-6deg); } 50% { transform: rotate(5deg); } 75% { transform: rotate(-3deg); } }
+@keyframes emo-rise {
+  0% { opacity: 0; transform: translateY(4px) scale(0.4); }
+  20% { opacity: 1; transform: translateY(0) scale(1.15); }
+  70% { opacity: 1; transform: translateY(-6px) scale(1); }
+  100% { opacity: 0; transform: translateY(-11px) scale(0.9); }
+}
+@keyframes emo-tune {
+  0% { opacity: 0; transform: translate(0, 3px) scale(0.5); }
+  20% { opacity: 1; transform: translate(-1px, 0) scale(1.1) rotate(-8deg); }
+  60% { opacity: 1; transform: translate(1px, -6px) rotate(10deg); }
+  100% { opacity: 0; transform: translate(-1px, -11px) rotate(-6deg); }
+}
+
+/* ---------- carrying (renderer/carry.js): drag a card, a pet or a group to a new spot ---------- */
+/* pets can be picked up: a paw cursor over them, closed while you carry one */
+.pet.pickable, .dpet, .dstack { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='%23fff' stroke='%23262630' stroke-width='1.5'%3E%3Cellipse cx='6.6' cy='12.2' rx='2.3' ry='2.8' transform='rotate(-22 6.6 12.2)'/%3E%3Cellipse cx='10.9' cy='7.8' rx='2.3' ry='2.9' transform='rotate(-8 10.9 7.8)'/%3E%3Cellipse cx='17.1' cy='7.8' rx='2.3' ry='2.9' transform='rotate(8 17.1 7.8)'/%3E%3Cellipse cx='21.4' cy='12.2' rx='2.3' ry='2.8' transform='rotate(22 21.4 12.2)'/%3E%3Cpath d='M14 13.4c3.7 0 6.7 3 6.7 6.1 0 2.4-1.9 3.7-3.8 3.7-1.2 0-1.9-.7-2.9-.7s-1.7.7-2.9.7c-1.9 0-3.8-1.3-3.8-3.7 0-3.1 3-6.1 6.7-6.1z'/%3E%3C/g%3E%3Cellipse cx='14' cy='18.9' rx='2.6' ry='1.7' fill='%23ff9db4'/%3E%3C/svg%3E") 14 14, grab; }
+html.carrying, html.carrying * { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='%23fff' stroke='%23262630' stroke-width='1.5'%3E%3Cpath d='M14 10.6c4 0 7.2 3.1 7.2 6.6 0 2.7-2.1 4.2-4.2 4.2-1.3 0-2-.7-3-.7s-1.7.7-3 .7c-2.1 0-4.2-1.5-4.2-4.2 0-3.5 3.2-6.6 7.2-6.6z'/%3E%3Cellipse cx='8.6' cy='13.6' rx='2' ry='2.2'/%3E%3Cellipse cx='12' cy='11.6' rx='2' ry='2.2'/%3E%3Cellipse cx='16' cy='11.6' rx='2' ry='2.2'/%3E%3Cellipse cx='19.4' cy='13.6' rx='2' ry='2.2'/%3E%3C/g%3E%3Cellipse cx='14' cy='17.4' rx='2.6' ry='1.6' fill='%23ff9db4'/%3E%3C/svg%3E") 14 14, grabbing !important; user-select: none; }
+html.carrying .dockbar { -webkit-app-region: no-drag; }
+html.carrying .card:hover { background: var(--card); }
+.carrier { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: transform; }
+.carrier .cbody { position: relative; display: flex; flex-direction: column; align-items: center; transform-origin: 50% 0; }
+.carrier .pet { width: 40px; height: 40px; filter: drop-shadow(0 7px 5px rgba(0, 0, 0, 0.28)); }
+.carrier.in-dock .pet { width: 34px; height: 34px; }
+.carrier .huddle { display: flex; }
+.carrier .huddle .pet { width: 34px; height: 34px; }
+.carrier .huddle .pet + .pet { margin-left: -16px; }
+.carrier .cbadge {
+  position: absolute; right: -9px; top: -5px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box;
+  border-radius: 9px; background: var(--accent); color: var(--accent-ink); font: 800 10.5px/18px var(--font-body); text-align: center;
+  box-shadow: 0 2px 5px var(--shadow);
+}
+.carrier .ctag {
+  margin-top: 3px; max-width: 150px; padding: 1px 7px; border-radius: 8px; background: var(--card-hi); color: var(--text);
+  font: 700 10px/16px var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 2px 6px var(--shadow);
+}
+/* carried: happy eyes, rosy cheeks, a little kick */
+[data-s="carry"] .eyes-happy { display: inline; }
+[data-s="carry"] .p-blush { opacity: 0.9; }
+[data-s="carry"] .pet-figure { animation: pet-kick 0.36s ease-in-out infinite alternate; transform-origin: 50% 10%; }
+[data-s="carry"] .wing-r { animation: pet-wave 0.22s ease-in-out infinite alternate; transform-origin: 30% 90%; }
+@keyframes pet-kick { from { transform: rotate(-4deg); } to { transform: rotate(4deg) translateY(0.6px); } }
+/* the nest: where it will land */
+.nest {
+  position: relative; flex: none; box-sizing: border-box; border-radius: var(--radius-card);
+  border: 1.5px dashed color-mix(in srgb, var(--pc, var(--accent)) 60%, transparent);
+  background: color-mix(in srgb, var(--pc, var(--accent)) 9%, transparent);
+}
+.nest::after {
+  content: ""; position: absolute; left: 14px; bottom: 6px; width: 30px; height: 6px; border-radius: 50%;
+  background: color-mix(in srgb, var(--pc, var(--accent)) 32%, transparent);
+}
+.list > .nest.cnest { height: 46px; }
+.list > .nest.child { margin-left: calc(var(--depth) * 14px); }
+.list > .nest.gnest { height: 30px; border-radius: var(--radius); }
+.list > .nest.gnest::after { display: none; }
+.dpets > .nest.dnest { width: 44px; height: 44px; border-radius: 12px; }
+.dockbar.named .dpets > .nest.dnest { width: 62px; height: 60px; }
+.dpets > .nest.dnest::after { left: 9px; width: 24px; height: 5px; bottom: 5px; }
+.dockbar > .nest.dgnest { width: 44px; height: 44px; align-self: flex-end; border-radius: 12px; margin-left: 10px; }
+.dockbar > .nest.dgnest::after { display: none; }
+.puff { position: fixed; z-index: 49; width: 7px; height: 7px; border-radius: 50%; pointer-events: none;
+  background: color-mix(in srgb, var(--text) 30%, transparent); }

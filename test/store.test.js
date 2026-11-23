@@ -217,3 +217,16 @@ test('waiting cards sort first and counts add up', () => {
   assert.deepEqual(snap.cards.map((c) => c.id), ['b', 'a', 'c']);
   assert.deepEqual(snap.counts, { working: 1, waiting: 1, done: 1, idle: 0 });
 });
+
+test('running out of usage makes a napping card, not an error; the next prompt wakes it', () => {
+  const { hook, card } = setup();
+  hook('UserPromptSubmit');
+  hook('StopFailure', { error: 'rate_limit', error_details: '5-hour limit reached' });
+  assert.equal(card().state, 'error');
+  assert.equal(card().limited, true);
+  assert.equal(card().error, 'Out of usage');
+  hook('UserPromptSubmit');
+  assert.equal(card().limited, false);
+  hook('StopFailure', { error: 'server_error' });
+  assert.equal(card().limited, false);
+});

@@ -45,3 +45,18 @@ test('missing settings file is created; invalid JSON is never overwritten', () =
   assert.throws(() => installHooks({ settingsFile: b.file, port: 4777, token: 'x'.repeat(48), backupDir: b.backupDir }));
   assert.equal(fs.readFileSync(b.file, 'utf8'), '{ "model": "opus", ');
 });
+
+test('prod and dev copies only touch their own hooks; dev never gets PermissionRequest', () => {
+  const { file, backupDir } = tmpSettings({});
+  installHooks({ settingsFile: file, port: 4777, token: 'p'.repeat(48), backupDir });
+  installHooks({ settingsFile: file, port: 4778, token: 'd'.repeat(48), backupDir, observe: true });
+  let h = JSON.parse(fs.readFileSync(file, 'utf8')).hooks;
+  assert.equal(h.Stop.length, 2);
+  assert.equal(h.PermissionRequest.length, 1, 'only prod answers permissions');
+  assert.ok(h.PermissionRequest[0].hooks[0].url.includes(':4777/'));
+  uninstallHooks({ settingsFile: file, backupDir, port: 4778 });
+  h = JSON.parse(fs.readFileSync(file, 'utf8')).hooks;
+  assert.equal(h.Stop.length, 1);
+  assert.ok(hooksInstalled(file, 4777));
+  assert.equal(hooksInstalled(file, 4778), false);
+});

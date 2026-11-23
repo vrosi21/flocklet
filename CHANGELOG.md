@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.5.0
+
+- Drag to reorder (`renderer/carry.js`): cards inside their section, projects / groups among each other,
+  in the panel and the pet dock. A parent moves with its children (ghost parents too); children move among
+  their siblings. The carried card folds into its pet (dangling, swings with speed), a nest marks the drop
+  spot, siblings slide (FLIP), landing squish + dust, unfold. Escape returns it. Order is saved per section
+  (`cfg.order`, `cfg.folderOrder`, custom groups reorder `cfg.groups`); unplaced sessions come first in the
+  automatic order. Settings → All settings → Order → "Back to automatic order".
+- Pet emotes for working / thinking / done pets (hop, heart, note, twirl, stretch, sparkle), about one per pet
+  every 40 s, at most two at once; off with "Busy pets do little emotes" (`cfg.emotes`). Paw cursors over pets.
+- Pet dock redesign: state bar under each pet, group labels above (only with more than one group), open-panel
+  and hide buttons at the end.
+- Settings: Simple / All settings. Simple has style presets, curated Shuffle (weighted toward good pairs, with
+  locks for colours / font / light-dark), Undo (20 steps), the last 5 styles, Mood / Edges / Glass / Size
+  sliders; hovering a style previews it on the real panel.
+- Zoom: 90 / 100 / 125 / 150 % for the whole app (window maths in `src/panelSize.js`).
+- Edges: Soft float is the default (no border, rounder, soft shadow; 16 px bottom margin so the shadow is not
+  cut). Glass setting Off / Light / Medium / Strong (90 / 78 / 64 %) with a gradient rim, sheen and bottom glow.
+- Usage meters and `src/usage.js` removed. A StopFailure that looks like a usage limit marks the card
+  "Out of usage" and its pet sleeps.
+- Debug log setting (off by default, on in the dev copy): event names and timings, never prompts, commands,
+  file contents or the token. With it on, a failed update install records the installer's exit code.
+- Dev copy beside the installed one: own data folder (`Flocklet Dev`), port 4778, watch-only hooks;
+  `npm run dev:bg` runs it invisible for tests. Hooks are scoped per port, so quitting one copy never removes
+  the other's hooks.
+
 ## 0.4.2
 
 - Fix: "Restart now" shortly after Windows started could quit Flocklet without installing (the silent

@@ -13,6 +13,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
+    "dev:bg": "electron . --bg --remote-debugging-port=9333",
     "test": "node --test \"test/**/*.test.js\"",
     "brand": "node scripts/brand.js",
     "dist": "electron-builder --win --publish never"

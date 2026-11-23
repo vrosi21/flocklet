@@ -58,20 +58,24 @@ const DRAWER_W = 300; // left / right
 const DRAWER_H = 320; // top / bottom
 const DRAWER_MIN_H = 400; // a side drawer needs room even when the deck is short
 const SIDES = ['left', 'right', 'top', 'bottom'];
+// Settings → Size: the whole app scales (text, pets, buttons). Sizes you drag are stored at 100 %.
+const ZOOMS = [0.9, 1, 1.25, 1.5];
+const clampZoom = (z) => (ZOOMS.includes(z) ? z : 1);
 
 // deck = {x, y, width, height} on screen. side = rail side, or null (minimised: no rail).
 // Returns the window rect and where the deck sits inside it (offX, offY).
-function shellRect(deck, side, drawerOpen, railMin = false) {
+// zoom: the page's zoom (Settings → Size); rail and drawer sizes are page pixels, the deck rect is screen pixels.
+function shellRect(deck, side, drawerOpen, railMin = false, zoom = 1) {
   if (!SIDES.includes(side)) return { ...deck, offX: 0, offY: 0 };
   const across = side === 'left' || side === 'right';
   const open = drawerOpen && !railMin; // a minimised sidebar has no drawer
-  const extra = (railMin ? RAIL_MIN : RAIL) + GAP + (open ? (across ? DRAWER_W : DRAWER_H) + GAP : 0);
+  const extra = Math.round(zoom * ((railMin ? RAIL_MIN : RAIL) + GAP + (open ? (across ? DRAWER_W : DRAWER_H) + GAP : 0)));
   const width = across ? deck.width + extra : deck.width;
-  const minH = open ? DRAWER_MIN_H : railMin ? 0 : RAIL_MIN_H;
+  const minH = Math.round(zoom * (open ? DRAWER_MIN_H : railMin ? 0 : RAIL_MIN_H));
   const height = across ? Math.max(deck.height, minH) : deck.height + extra;
   const offX = side === 'left' ? extra : 0;
   const offY = side === 'top' ? extra : 0;
   return { x: deck.x - offX, y: deck.y - offY, width, height, offX, offY };
 }
 
-module.exports = { MINI_MIN, MINI_MAX, clampMini, snapMini, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_CAP, EDGES, clampWidth, clampCap, dragTo, fitHeight, windowHeight, RAIL, RAIL_MIN, RAIL_MIN_H, GAP, DRAWER_W, DRAWER_H, DRAWER_MIN_H, SIDES, shellRect };
+module.exports = { MINI_MIN, MINI_MAX, clampMini, snapMini, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_CAP, EDGES, clampWidth, clampCap, dragTo, fitHeight, windowHeight, RAIL, RAIL_MIN, RAIL_MIN_H, GAP, DRAWER_W, DRAWER_H, DRAWER_MIN_H, SIDES, shellRect, ZOOMS, clampZoom };

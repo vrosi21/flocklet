@@ -73,9 +73,10 @@
         cur = parentCard;
       }
     }
+    // A tree sorts by its most urgent card, unless you placed it yourself (`ordered`, see applyOrder): then it stays put.
     const score = (n) => {
-      let s = n.ghost ? Infinity : order.get(n.card.key);
-      for (const ch of n.children) s = Math.min(s, score(ch));
+      let s = n.ghost && !n.card.ordered ? Infinity : order.get(n.card.key);
+      for (const ch of n.children) { const cs = score(ch); if (!n.card.ordered) s = Math.min(s, cs); }
       n.score = s;
       return s;
     };
@@ -109,7 +110,7 @@
 
   // Project folders, each with its parent/child tree. A whole tree goes into the folder of its top
   // parent, so a child never leaves its parent. Folders and trees keep the urgency order of the forest.
-  function folderForest(cards, all) {
+  function folderForest(cards, all, folderOrder = []) {
     const map = new Map();
     let cur = null;
     for (const it of forest(cards, all)) {
@@ -121,14 +122,16 @@
       cur.items.push(it);
       if (it.type === 'card') cur.count += 1;
     }
-    return [...map.values()].flatMap((s) => [
+    const rank = new Map(folderOrder.map((k, i) => [k, i]));
+    const r = (s) => (rank.has(s.key) ? rank.get(s.key) : -1); // projects you never moved come first, as they appear
+    return [...map.values()].sort((a, b) => r(a) - r(b)).flatMap((s) => [
       { type: 'header', key: s.key, label: s.label, count: s.count, color: null }, ...s.items]);
   }
 
   // Returns render items: {type:'header', key, label, count, color} | {type:'card'|'ghost', card, depth}
-  function arrange(cards, mode, { all = cards, groups = [], showEmptyGroups = false } = {}) {
+  function arrange(cards, mode, { all = cards, groups = [], showEmptyGroups = false, folderOrder = [] } = {}) {
     if (mode === 'tree') return forest(cards, all);
-    if (mode === 'folder') return folderForest(cards, all);
+    if (mode === 'folder') return folderForest(cards, all, folderOrder || []);
     if (mode === 'custom') {
       const idx = new Map(groups.map((g, i) => [g.id, i]));
       const byId = new Map(groups.map((g) => [g.id, g]));
@@ -170,7 +173,52 @@
     return out;
   }
 
-  const api = { MODES, decorate, count, search, arrange, forest, folderName, projectRoot, fold, foldKeyOf, stateCounts, STATE_ORDER };
+  // ---- your own order (drag and drop, renderer/carry.js) ----
+  // Cards you placed are `ordered` and keep their place; the rest (new sessions) come first, in the store's
+  // order (needs you first, then most recent).
+  function applyOrder(cards, order = []) {
+    if (!order || !order.length) return cards;
+    const rank = new Map(order.map((k, i) => [k, i]));
+    return cards.map((c, i) => ({ c, i, r: rank.has(c.key) ? rank.get(c.key) : -1 }))
+      .sort((a, b) => (a.r - b.r) || (a.i - b.i))
+      .map(({ c, r }) => (r < 0 ? c : { ...c, ordered: true }));
+  }
+  // A drop sends one section's keys in their new order: they become one block of the saved order, where the
+  // first of them was. Only the order inside a section matters (sections keep their own order).
+  function placeBlock(order = [], keys = []) {
+    const set = new Set(keys);
+    const at = Math.max(0, order.findIndex((k) => set.has(k)));
+    const rest = order.filter((k) => !set.has(k));
+    return [...rest.slice(0, at), ...keys, ...rest.slice(at)];
+  }
+  // The same drop on the cards in hand, so the overlay shows it before main answers: the keys take the
+  // places they had, in their new order.
+  function reorderBlock(cards, keys) {
+    const set = new Set(keys);
+    const byKey = new Map(cards.map((c) => [c.key, c]));
+    const slots = [];
+    cards.forEach((c, i) => { if (set.has(c.key)) slots.push(i); });
+    const out = cards.slice();
+    keys.filter((k) => byKey.has(k)).forEach((k, j) => { out[slots[j]] = { ...byKey.get(k), ordered: true }; });
+    return out;
+  }
+  // items: one section as [{ key, depth }]. An item's unit = it plus its children (the deeper items after it).
+  function unitEnd(items, i) {
+    let j = i + 1;
+    while (j < items.length && items[j].depth > items[i].depth) j += 1;
+    return j;
+  }
+  // Move item `from` with its children so it starts at index `to` of the original list.
+  function moveUnit(items, from, to) {
+    const end = unitEnd(items, from);
+    if (to >= from && to <= end) return items.slice();
+    const unit = items.slice(from, end);
+    const rest = [...items.slice(0, from), ...items.slice(end)];
+    const at = to > end ? to - unit.length : to;
+    return [...rest.slice(0, at), ...unit, ...rest.slice(at)];
+  }
+
+  const api = { MODES, applyOrder, placeBlock, reorderBlock, unitEnd, moveUnit, decorate, count, search, arrange, forest, folderName, projectRoot, fold, foldKeyOf, stateCounts, STATE_ORDER };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AgentDeckGrouping = api;
 })(typeof window !== 'undefined' ? window : this);
