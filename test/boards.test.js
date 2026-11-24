@@ -71,3 +71,36 @@ test('saved boards are checked: bad ids, names and sides are dropped or fixed', 
   assert.deepEqual(list.map((b) => [b.id, b.name, b.width, b.stuck, b.visible, b.inside]), [['b_0000000a', 'Board', 640, null, true, false]]);
   assert.deepEqual(B.normalizeSessionBoard({ a: 'b_0000000a', b: 'b_gone', 'bad key!': 'main', c: 'main' }, list), { a: 'b_0000000a', c: 'main' });
 });
+
+test('boards stick to Main or to each other; side by side they join, stacked they stay apart', () => {
+  const main = { id: 'main', rect: { x: 1000, y: 0, width: 400, height: 500 } };
+  const other = { id: 'b_00000002', rect: { x: 600, y: 0, width: 340, height: 120 } };
+  assert.deepEqual(B.snapBest({ x: 942, y: 10, width: 50, height: 60 }, [main, other]), { to: 'b_00000002', side: 'right', along: 10 },
+    'touching both: the nearer edge wins');
+  assert.deepEqual(B.snapBest({ x: 600, y: 125, width: 340, height: 120 }, [main, other]), { to: 'b_00000002', side: 'bottom', along: 0 });
+  assert.equal(B.snapBest({ x: 0, y: 900, width: 10, height: 10 }, [main, other]), null);
+  const cfg = cfgWith([
+    { id: 'b_00000001', stuck: { to: 'b_00000002', side: 'right', along: 0 } },
+    { id: 'b_00000002' },
+    { id: 'b_00000003', stuck: { to: 'b_00000002', side: 'bottom', along: 0 } },
+    { id: 'b_00000004', stuck: { side: 'left', along: 3 } },
+  ]);
+  assert.deepEqual(cfg.boards[3].stuck, { to: 'main', side: 'left', along: 3 }, 'old saves stick to Main');
+  const j = B.joins(cfg.boards);
+  assert.equal(j.b_00000001.left, true);
+  assert.equal(j.b_00000002.right, true);
+  assert.equal(j.b_00000002.bottom, true);
+  assert.equal(j.b_00000003.top, true);
+  assert.equal(j.b_00000004, undefined, 'stuck to Main: no join');
+  assert.deepEqual([...B.stuckChain(cfg.boards, 'b_00000001')].sort(), ['b_00000001', 'b_00000002'], 'its chain');
+  B.removeBoard(cfg, 'b_00000002');
+  assert.deepEqual(cfg.boards.map((b) => b.stuck && b.stuck.to), [null, null, 'main'], 'what was stuck to it floats free');
+});
+
+test('board names stay unique; a board stuck to one that is gone floats free', () => {
+  const cfg = cfgWith([{ id: 'b_00000001', name: 'Content' }]);
+  B.addBoard(cfg, { id: 'b_00000002', name: 'content' });
+  B.addBoard(cfg, { id: 'b_00000003', name: 'Content' });
+  assert.deepEqual(cfg.boards.map((b) => b.name), ['Content', 'content 2', 'Content 3']);
+  assert.equal(B.normalizeBoards([{ id: 'b_00000001', stuck: { to: 'b_0000dead', side: 'left', along: 0 } }])[0].stuck, null);
+});

@@ -125,4 +125,5 @@ test('a placed tree keeps its spot even when a child needs you; projects follow 
   const two = [card('p', { cwd: 'C:/one' }), card('q', { cwd: 'C:/two' })];
   assert.deepEqual(shape(G.arrange(two, 'folder', { folderOrder: ['c:/two', 'c:/one'] })), ['# two (1)', 'q', '# one (1)', 'p']);
   assert.deepEqual(shape(G.arrange(two, 'folder')), ['# one (1)', 'p', '# two (1)', 'q'], 'no folder order: as they appear');
+  assert.deepEqual(shape(G.arrange(two, 'folder', { names: { 'c:/two': 'Website' } })), ['# one (1)', 'p', '# Website (1)', 'q'], 'your name for a project');
 });

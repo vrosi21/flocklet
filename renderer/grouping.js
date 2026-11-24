@@ -110,13 +110,13 @@
 
   // Project folders, each with its parent/child tree. A whole tree goes into the folder of its top
   // parent, so a child never leaves its parent. Folders and trees keep the urgency order of the forest.
-  function folderForest(cards, all, folderOrder = []) {
+  function folderForest(cards, all, folderOrder = [], names = {}) {
     const map = new Map();
     let cur = null;
     for (const it of forest(cards, all)) {
       if (it.depth === 0) {
         const k = folderKey(it.card.cwd);
-        if (!map.has(k)) map.set(k, { key: k, label: folderName(it.card.cwd), count: 0, items: [] });
+        if (!map.has(k)) map.set(k, { key: k, label: names[k] || folderName(it.card.cwd), count: 0, items: [] });
         cur = map.get(k);
       }
       cur.items.push(it);
@@ -129,9 +129,9 @@
   }
 
   // Returns render items: {type:'header', key, label, count, color} | {type:'card'|'ghost', card, depth}
-  function arrange(cards, mode, { all = cards, groups = [], showEmptyGroups = false, folderOrder = [] } = {}) {
+  function arrange(cards, mode, { all = cards, groups = [], showEmptyGroups = false, folderOrder = [], names = {} } = {}) {
     if (mode === 'tree') return forest(cards, all);
-    if (mode === 'folder') return folderForest(cards, all, folderOrder || []);
+    if (mode === 'folder') return folderForest(cards, all, folderOrder || [], names || {});
     if (mode === 'custom') {
       const idx = new Map(groups.map((g, i) => [g.id, i]));
       const byId = new Map(groups.map((g) => [g.id, g]));

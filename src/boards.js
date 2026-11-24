@@ -5,6 +5,8 @@
 const { folderKey } = require('../renderer/grouping');
 
 const BOARD_RE = /^b_[0-9a-f]{8}$/;
+// Icons a board can have instead of its first letter (renderer/icons.js draws them).
+const ICONS = ['home', 'star', 'heart', 'bolt', 'flask', 'book', 'code', 'brush', 'music', 'leaf', 'rocket', 'coffee', 'flag', 'box', 'globe', 'cap'];
 const SIDES = ['left', 'right', 'top', 'bottom'];
 const DEFAULT_W = 340;
 const MAX_BOARDS = 24;
@@ -25,8 +27,19 @@ function normalizeBoards(list, normalizeTheme = (t) => t) {
     pos: point(b.pos),
     width: clampW(b.width),
     maxHeight: Number.isFinite(b.maxHeight) ? Math.max(160, Math.round(b.maxHeight)) : null,
-    stuck: b.stuck && SIDES.includes(b.stuck.side) && Number.isFinite(b.stuck.along) ? { side: b.stuck.side, along: Math.round(b.stuck.along) } : null,
-  }));
+    // stuck to Main (to: 'main') or to another board, on one of its sides (magnet)
+    stuck: b.stuck && SIDES.includes(b.stuck.side) && Number.isFinite(b.stuck.along)
+      ? { to: BOARD_RE.test(b.stuck.to) && b.stuck.to !== b.id ? b.stuck.to : 'main', side: b.stuck.side, along: Math.round(b.stuck.along) } : null,
+    dock: b.dock === true, // shown as a pet dock, like Main's
+    icon: ICONS.includes(b.icon) ? b.icon : null, // null: its first letter
+    fresh: b.fresh === true, // just made: its name field opens so you can name it
+  })).map((b, _i, all) => (b.stuck && b.stuck.to !== 'main' && !all.some((x) => x.id === b.stuck.to) ? { ...b, stuck: null } : b));
+}
+// Board names stay unique: a second "Content" becomes "Content 2".
+function uniqueName(boards, name) {
+  const taken = new Set(boards.map((b) => b.name.toLowerCase()));
+  if (!taken.has(name.toLowerCase())) return name;
+  for (let n = 2; ; n += 1) if (!taken.has(`${name} ${n}`.toLowerCase())) return `${name} ${n}`;
 }
 
 function normalizeSessionBoard(map, boards) {
@@ -88,8 +101,8 @@ function moveTo(cfg, items, target) {
 
 function addBoard(cfg, { id, name, pos, items }) {
   if (!BOARD_RE.test(id) || cfg.boards.length >= MAX_BOARDS) return null;
-  const b = { id, name: cleanName(name), theme: null, projects: [], groups: [], inside: false, visible: true,
-    pos: point(pos), width: DEFAULT_W, maxHeight: null, stuck: null };
+  const b = { id, name: uniqueName(cfg.boards, cleanName(name)), theme: null, projects: [], groups: [], inside: false, visible: true,
+    pos: point(pos), width: DEFAULT_W, maxHeight: null, stuck: null, dock: false, fresh: false, icon: null };
   cfg.boards.push(b);
   if (items) moveTo(cfg, items, id);
   return b;
@@ -97,14 +110,19 @@ function addBoard(cfg, { id, name, pos, items }) {
 
 function removeBoard(cfg, id) {
   cfg.boards = cfg.boards.filter((b) => b.id !== id);
+  for (const b of cfg.boards) if (b.stuck && b.stuck.to === id) b.stuck = null; // what was stuck to it floats free
   for (const [k, v] of Object.entries(cfg.sessionBoard)) if (v === id) delete cfg.sessionBoard[k];
   cfg.hiddenByAll = (cfg.hiddenByAll || []).filter((x) => x !== id);
   if (cfg.view === id) cfg.view = null;
 }
 
-// ---- magnet: a board dropped near Main's edge sticks to it and moves with it ----
-// a, m: window rects {x, y, width, height}. Returns the side of Main it sticks to and its offset along that side.
+// ---- magnet: a board let go near Main's or another board's edge sticks to it and moves with it ----
+// a, m: window rects {x, y, width, height}. Returns the side of m it sticks to and its offset along that side.
 function snapTo(a, m, dist = 28) {
+  const r = snapRaw(a, m, dist);
+  return r && { side: r.side, along: r.along };
+}
+function snapRaw(a, m, dist) {
   const cands = [];
   const vOverlap = a.y < m.y + m.height && a.y + a.height > m.y;
   const hOverlap = a.x < m.x + m.width && a.x + a.width > m.x;
@@ -118,7 +136,42 @@ function snapTo(a, m, dist = 28) {
   }
   const best = cands.filter((c) => c.d <= dist).sort((p, q) => p.d - q.d)[0];
   if (!best) return null;
-  return { side: best.side, along: best.side === 'left' || best.side === 'right' ? a.y - m.y : a.x - m.x };
+  return { side: best.side, along: best.side === 'left' || best.side === 'right' ? a.y - m.y : a.x - m.x, d: best.d };
+}
+// The nearest edge among targets [{ id: 'main' | board id, rect }]: { to, side, along } or null.
+function snapBest(a, targets, dist = 28) {
+  let best = null;
+  for (const t of targets) {
+    const r = snapRaw(a, t.rect, dist);
+    if (r && (!best || r.d < best.d)) best = { to: t.id, side: r.side, along: r.along, d: r.d };
+  }
+  return best && { to: best.to, side: best.side, along: best.along };
+}
+// Boards side by side join into one (their touching edges lose their margin and corners); stacked ones stay
+// separate cards with a small gap. Returns { [board id]: { left, right, top, bottom } } for boards stuck to boards.
+const FACING = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' };
+function joins(boards) {
+  const out = {};
+  const mark = (id, side) => { out[id] = out[id] || { left: false, right: false, top: false, bottom: false }; out[id][side] = true; };
+  for (const b of boards) {
+    if (!b.stuck || b.stuck.to === 'main' || b.inside) continue;
+    const t = boards.find((x) => x.id === b.stuck.to);
+    if (!t || t.inside) continue;
+    mark(b.id, FACING[b.stuck.side]); // b sits on t's right: b's left edge touches t
+    mark(t.id, b.stuck.side);
+  }
+  return out;
+}
+// The boards `from` hangs on, directly or not (to avoid sticking a board to one that is stuck to it).
+function stuckChain(boards, from) {
+  const seen = new Set();
+  let cur = boards.find((b) => b.id === from);
+  while (cur && cur.stuck && cur.stuck.to !== 'main' && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    cur = boards.find((b) => b.id === cur.stuck.to);
+    if (cur) seen.add(cur.id);
+  }
+  return seen;
 }
 // Where a stuck board goes when Main moves or changes size.
 function stuckPos(m, size, s) {
@@ -148,5 +201,5 @@ function showAll(cfg) {
   cfg.hiddenByAll = [];
 }
 
-module.exports = { BOARD_RE, DEFAULT_W, MAX_BOARDS, normalizeBoards, normalizeSessionBoard, place, moveTo, addBoard, removeBoard,
-  snapTo, stuckPos, hideAll, restoreHidden, showAll, cleanName };
+module.exports = { BOARD_RE, ICONS, DEFAULT_W, MAX_BOARDS, normalizeBoards, normalizeSessionBoard, place, moveTo, addBoard, removeBoard,
+  snapTo, snapBest, stuckPos, joins, stuckChain, uniqueName, hideAll, restoreHidden, showAll, cleanName };

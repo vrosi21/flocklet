@@ -30,7 +30,7 @@
     const active = onDeck(state.cards).filter((c) => c.group === 'active');
     const secs = [];
     let cur = null;
-    for (const it of G.arrange(active, mode, { all: state.cards, groups: ui.groups, folderOrder: ui.folderOrder })) {
+    for (const it of G.arrange(active, mode, { all: state.cards, groups: ui.groups, folderOrder: ui.folderOrder, names: ui.projectNames })) {
       if (it.type === 'header') { cur = { key: it.key, label: it.label, items: [] }; secs.push(cur); continue; }
       if (!cur) { cur = { key: null, label: null, items: [] }; secs.push(cur); }
       cur.items.push({ key: it.card.key, depth: it.depth, card: it.card, ghost: it.type === 'ghost' });
@@ -381,7 +381,7 @@
   // Dropped outside this window: main moves it (or makes a board); here it is gone at once.
   function leave(d) {
     const items = itemsOf(d);
-    api.carry({ op: 'drop', x: d.sx, y: d.sy, items });
+    api.carry({ op: 'drop', x: d.sx, y: d.sy, items, from: myBoard() }); // all of a board's cards: the board itself moves
     d.carrier.remove();
     goneHere(d, items);
   }

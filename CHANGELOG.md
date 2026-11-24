@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.3
+
+- Crash fix: notifications were released on 'close' (they leave the screen but stay clickable in the notification
+  center), so a later click called into a freed object (0xc000041d, twice on 2026-11-24). Now kept until Flocklet
+  closes them (oldest closed past 30), all closed at quit, leftovers cleared at start
+  (`ToastNotificationManager.History.Clear`). Local crash dumps (`crashReporter`, no upload), crashed processes and
+  main-process errors go to the log.
+- Sidebar: never hides (`railMin` gone). Eye button = `cfg.panelsHidden` (hides Main's card, the side card and every
+  board window; the window becomes just the sidebar, sized from its measured length; same boards come back).
+  Minimise-to-tray moved here and hides every board too. Top / bottom sidebar spans the deck and the side card.
+- Side card: left or right only; its top strip is a drag region.
+- Boards: icons (`ICONS`), own pet dock (`b.dock`), magnet to other boards (`stuck.to`, `snapBest`, followers move
+  along); side by side they join (no margin, square corners, `joins`) and take the target's type; stacked ones keep a
+  3 px gap. A board window let go over Main folds into a tab (`fx` 'into-main'). Dragging all of a board out moves the
+  board instead of making an empty twin. Names unique; group/project boards no longer get folder names ("Board N",
+  name field opens).
+- Sessions: right-click menu in the window's style (native menu in small windows), pin on every card.
+- Names: `cfg.projectNames` (pencil on project headers), dock project names off by default (`dockGroupNames`),
+  session names under pets on (`dockNames`).
+- Themed tooltips (native ones only where a themed one would not fit). Dock spacing: a label never widens its group.
+
 ## 0.6.2
 
 - `src/hookPolicy.js`: a read-only check of whether Claude Code will run Flocklet's hooks. It reads the managed

@@ -17,7 +17,9 @@ that shows what its agent is doing, so you can keep working elsewhere and still 
 - **Boards**: drag a group or a session out of the panel and it becomes a board of its own, with its own name and
   style. Drop it near the panel and it sticks there and moves with it; drop it anywhere else and it floats free.
   In the sidebar, tabs switch the main card between Main and its boards (+ makes a new one), and toggles show or
-  hide boards in their own windows. Drop a session on a tab or toggle to move it there.
+  hide boards in their own windows. Drop a session on a tab or toggle to move it there. Boards get an icon, can be
+  pet docks too, and join side by side or stack when you drop them next to each other.
+- **Right-click a session** to open, pin, hide, mute or move it. The sidebar's eye hides every panel but itself.
 - **A one-minute tour** on first start (reopen it from the tray or Settings).
 
 ## Install
