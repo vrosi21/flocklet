@@ -41,6 +41,8 @@ Everything stays on your computer.
 - Flocklet never reads your Claude login and never contacts Anthropic; its only network traffic is the
   GitHub update check.
 - Answers you give in the panel go back only to the waiting Claude Code session.
+- If Claude Code is set to skip these hooks (your organisation's policy, or `disableAllHooks` in your settings),
+  Flocklet says so in the panel and keeps showing your session list. It never changes or works around that.
 
 Flocklet is an independent project. It is not made by, affiliated with or endorsed by Anthropic.
 "Claude" is a trademark of Anthropic.

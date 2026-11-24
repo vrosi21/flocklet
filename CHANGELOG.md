@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.2
+
+- `src/hookPolicy.js`: a read-only check of whether Claude Code will run Flocklet's hooks. It reads the managed
+  policy (HKLM / HKCU `SOFTWARE\Policies\ClaudeCode` "Settings", `C:\Program Files\ClaudeCode\managed-settings.json`
+  and `managed-settings.d\*.json`) and `~/.claude/settings.json`. Hooks count as off when `allowManagedHooksOnly`,
+  `disableAllHooks` or `strictPluginOnlyCustomization: ["hooks"]` is set, or when an `allowedHttpHookUrls` list does
+  not cover `http://127.0.0.1:<port>/hook` (a localhost pattern counts as covering it). The panel banner and tray
+  then say why. Checked at start, on Reconnect and every 10 minutes. Server-managed policy is not visible on disk.
+
 ## 0.6.1
 
 - Sessions + Settings are one card beside the deck (tabs), docked on its own side by its dots (`cfg.drawerSide`;

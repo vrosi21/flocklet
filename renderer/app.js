@@ -944,7 +944,7 @@ function render() {
     if (ui.dock) { /* pet dock: nothing else */ } else if (ui.collapsed) kids.push(miniBar(cards));
     if (ui.collapsed && !ui.dock) kids.push(miniList(deck, ui.miniList)); // always built, so its full height can be measured
     if (!ui.collapsed && !ui.dock) {
-      if (!hooks.ok) kids.push(h('div', { class: 'banner' }, `Live updates off: ${hooks.error}. Showing session list only.`));
+      if (!hooks.ok) kids.push(h('div', { class: 'banner' }, hooks.blocked ? hooks.error : `Live updates off: ${hooks.error}. Showing session list only.`));
       const active = deck.filter((c) => c.group === 'active');
       let items = G.fold(G.arrange(active, ui.groupBy, { all: cards, groups: ui.groups, folderOrder: ui.folderOrder }), ui.folded);
       // a board with one project or group: its header would only repeat the board's name

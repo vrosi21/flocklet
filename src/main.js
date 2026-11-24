@@ -22,6 +22,7 @@ const { readContext } = require('./context');
 
 const Release = require('./release');
 const Boards = require('./boards');
+const HookPolicy = require('./hookPolicy');
 const INSTALLED = Release.isInstalled(app);
 // A copy run from source is the dev copy. It runs next to the installed (prod) one: own settings folder (so its
 // own single-instance lock), own port, and hooks that watch but never answer permissions (prod keeps doing that).
@@ -150,6 +151,28 @@ function ensureHooks() {
   } catch (e) {
     hooks = { ok: false, error: `could not update settings.json (${e.message})` };
   }
+  rebuildTrayMenu();
+  pushState();
+  checkHookPolicy();
+}
+
+// Written is not the same as running: Claude Code skips these hooks when an admin policy or your own setting says
+// so. Look (read-only) and say it plainly; never work around it (src/hookPolicy.js).
+const regQuery = (key) => new Promise((resolve, reject) => {
+  if (process.platform !== 'win32') { reject(new Error('no registry')); return; }
+  execFile('reg', ['query', key, '/v', 'Settings'], { windowsHide: true, timeout: 4000 }, (err, out) => (err ? reject(err) : resolve(out)));
+});
+async function checkHookPolicy() {
+  if (!server || (!hooks.ok && !hooks.blocked)) return; // not written at all: that error stays
+  let why = null;
+  try {
+    const p = await HookPolicy.readPolicies({ fs, regQuery, programFiles: process.env.ProgramFiles, settingsFile: SETTINGS_FILE });
+    why = HookPolicy.blockedReason({ ...p, url: `http://127.0.0.1:${PORT}/hook` });
+  } catch (e) { dlog('hook policy check failed', e.message); }
+  const was = hooks.blocked ? hooks.why : null;
+  if (why === was) return;
+  hooks = why ? { ok: false, blocked: true, why, error: HookPolicy.MESSAGES[why] } : { ok: true, error: null };
+  log('hooks', why ? `blocked by Claude Code settings: ${why}` : 'allowed again');
   rebuildTrayMenu();
   pushState();
 }
@@ -418,7 +441,7 @@ function rebuildTrayMenu() {
       { label: 'Pet dock', type: 'radio', checked: !!cfg && cfg.dock, click: () => setView({ dock: true }) },
     ] },
     { type: 'separator' },
-    { label: hooks.ok ? 'Live updates: on' : `Live updates: off (${hooks.error})`, enabled: false },
+    { label: hooks.ok ? 'Live updates: on' : hooks.blocked ? 'Live updates: off (Claude Code skips hooks here)' : `Live updates: off (${hooks.error})`, enabled: false },
     { label: 'Notifications', type: 'checkbox', checked: !!(cfg && cfg.notify),
       click: (mi) => { cfg.notify = mi.checked; saveConfig(); } },
     { label: 'Reconnect to Claude Code', click: ensureHooks, enabled: !!server },
@@ -1216,6 +1239,7 @@ if (!app.requestSingleInstanceLock() || process.argv.includes('--quit')) {
     nativeTheme.on('updated', () => { if (cfg.theme.mode === 'windows') pushState(); });
     setInterval(pushState, 30e3); // re-ages readings and timers
     setInterval(() => refreshContext(), 15e3);
+    setInterval(checkHookPolicy, 10 * 60e3); // a policy can change while Flocklet runs
     setTimeout(() => refreshContext(), 2000);
     ensureStartMenuShortcut();
     registerToastIdentity();

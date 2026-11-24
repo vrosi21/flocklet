@@ -1,5 +1,1 @@
-- **Sessions and Settings are one card again**, with two tabs. Drag its dots to dock it on any side of the panel, on its own or on the same side as the sidebar. It always stays attached.
-- **Boards live in the sidebar.** The top part has tabs for the main card: Main, the boards that live on it, and + for a new board. The part below has an on/off toggle for each board in its own window.
-- **Move things by dropping them.** Drop a session on a tab or a toggle to move it to that board, or on + to make a new board. Drag a tab out of Flocklet to give that board its own window. Drag a board window onto the panel, or its toggle onto the tabs, to put it back on the main card. A board window also has a "Move into Main" button.
-- **Scroll bars are back** and always visible: a rounded thumb on a faint track.
-- **Fix:** closing Flocklet with `--quit` when it was not running started it instead.
+- **Flocklet tells you when Claude Code skips its hooks.** Your organisation's policy, or `disableAllHooks` in your own Claude Code settings, can switch hooks off. Flocklet used to go quiet without saying why. Now the panel and the tray tell you that live states and answering are off, and the session list keeps working. Flocklet only reads these settings; it never changes them or works around them.
