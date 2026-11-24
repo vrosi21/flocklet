@@ -14,6 +14,9 @@ that shows what its agent is doing, so you can keep working elsewhere and still 
   colours per session; resize, fold groups, pin sessions.
 - **Drag to arrange**: pick up a card, a pet or a group and drop it where you want it. The card folds into
   its pet while you carry it, and a parent takes its children along. Busy pets do a little emote now and then.
+- **Boards**: drag a group or a session out of the panel and it becomes a board of its own, with its own name and
+  style. Drop it near the panel and it sticks there and moves with it; drop it anywhere else and it floats free.
+  Each board gets a button in the sidebar to show or hide it, or it can live inside the main panel.
 - **A one-minute tour** on first start (reopen it from the tray or Settings).
 
 ## Install

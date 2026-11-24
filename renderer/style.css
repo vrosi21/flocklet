@@ -131,8 +131,17 @@ button:disabled { opacity: 0.3; cursor: default; }
   flex-direction: column;
   gap: 6px;
 }
-.list::-webkit-scrollbar, .idle-list::-webkit-scrollbar, .blist::-webkit-scrollbar { width: 6px; }
-.list::-webkit-scrollbar-thumb, .idle-list::-webkit-scrollbar-thumb, .blist::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 3px; }
+/* scroll bars: a slim rounded thumb with no track; faint until you point at the list, the accent while you drag it */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-button { display: none; }
+::-webkit-scrollbar-thumb {
+  min-height: 36px; border: 3px solid transparent; border-radius: 10px; background-clip: padding-box;
+  background-color: color-mix(in srgb, var(--text) 10%, transparent);
+}
+:hover::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--text) 28%, transparent); }
+::-webkit-scrollbar-thumb:hover { border-width: 2px; background-color: color-mix(in srgb, var(--text) 45%, transparent); }
+::-webkit-scrollbar-thumb:active { border-width: 2px; background-color: var(--accent); }
 
 .empty { padding: 14px 8px 10px; color: var(--muted); text-align: center; font-size: 12px; }
 
@@ -854,3 +863,63 @@ html.carrying .card:hover { background: var(--card); }
 .dockbar > .nest.dgnest::after { display: none; }
 .puff { position: fixed; z-index: 49; width: 7px; height: 7px; border-radius: 50%; pointer-events: none;
   background: color-mix(in srgb, var(--text) 30%, transparent); }
+
+/* ---------- windows: Main, a board, Settings, the carried pet (renderer/app.js VIEW) ---------- */
+.shell.solo { flex-direction: row; }
+.shell.solo > .rail, .shell.solo > .drawer { display: none; }
+.shell.solo > .panel { width: 100%; flex: 1 1 auto; }
+.v-carry #shell, .v-carry .rz, .v-settings .rz { display: none; }
+.v-carry .carrier { position: fixed; left: 50%; top: 6px; transform: translateX(-50%); }
+/* Settings in its own window: drag its header to move it */
+.panel.settingswin > .settings { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.v-settings .dheadrow .dhead { display: none; }
+.v-settings .dheadrow:not(:has(button)) { display: none; }
+.sgear { display: grid; place-items: center; color: var(--accent); }
+.stylefor { color: var(--muted); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* the sidebar moves Main too (its buttons stay buttons) */
+.rail { -webkit-app-region: drag; }
+.rail button, .rail .rgrip, .rail .rboards { -webkit-app-region: no-drag; }
+
+/* ---------- boards (src/boards.js) ---------- */
+/* a board's name: click to rename */
+.bname { min-width: 0; max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; padding: 2px 5px; margin-left: -5px; border-radius: var(--radius); }
+button.bname:hover { background: var(--hover); }
+input.bname { height: 26px; width: 62%; margin-left: -5px; padding: 0 6px; font-weight: 700; }
+.header input { -webkit-app-region: no-drag; }
+.bdot { width: 11px; height: 11px; border-radius: 4px; background: var(--accent); flex: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.bdot.quiet { background: var(--muted); box-shadow: none; }
+.bdot.waiting { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 22%, transparent); animation: pulse 1.6s ease-in-out infinite; }
+/* a board's style, right on the board */
+.bstyle { flex: none; margin: 0 8px 8px; padding: 8px; border-radius: var(--radius-card); background: var(--card); display: flex; flex-direction: column; gap: 8px; }
+.bstyle .ptiles { margin: 0; }
+.bstyle .seg { flex-wrap: wrap; }
+/* Main showing a board on its card: the way back */
+.vback { display: inline-flex; align-items: center; gap: 1px; height: 24px; padding: 0 8px 0 3px; border-radius: 12px; flex: none;
+  background: var(--hover); color: var(--text-2); font-size: 11px; font-weight: 700; }
+.vback:hover { background: var(--hover-2); color: var(--text); }
+.vback .ic, .vback .ic svg { width: 14px; height: 14px; }
+/* sidebar: a button per board (its colours and first letter), and one for all of them */
+.rboards { display: flex; align-items: center; gap: 4px; }
+.side-left > .rail .rboards, .side-right > .rail .rboards { flex-direction: column; margin-top: 2px; padding-top: 6px; border-top: 1px solid var(--line); }
+.side-top > .rail .rboards, .side-bottom > .rail .rboards { flex-direction: row; margin-left: 2px; padding-left: 6px; border-left: 1px solid var(--line); }
+.bsq {
+  width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center;
+  font-size: 10.5px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  background: linear-gradient(135deg, var(--s-bg) 50%, var(--s-acc) 50%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  transition: opacity 0.15s, filter 0.15s;
+}
+.rboard:not(.on) .bsq { opacity: 0.45; filter: saturate(0.5); }
+.rbtn.rboard.on { background: var(--hover); }
+.rdot { position: absolute; right: 2px; top: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px var(--bg); }
+.rall { opacity: 0.7; }
+.rall:hover { opacity: 1; }
+/* a window you can drop on lights up */
+.panel.dropzone { box-shadow: var(--float), 0 0 0 2px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 45%, transparent); }
+/* a new board window pops in */
+.v-board .panel { animation: boardin 0.36s cubic-bezier(0.3, 1.4, 0.5, 1); }
+@keyframes boardin { from { transform: scale(0.9); opacity: 0; } to { transform: none; opacity: 1; } }
+/* carried out of its window: the pet goes to its own window, the nest closes */
+.carrier.gone { opacity: 0; }
+.list > .nest.away { height: 0 !important; border-width: 0; margin: -3px 0; }
+.dpets > .nest.away, .dockbar > .nest.away { width: 0 !important; border-width: 0; margin: 0; }

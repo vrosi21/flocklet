@@ -1,6 +1,14 @@
 // Flocklet overlay. Untrusted strings (titles, commands, messages) only ever go
 // through text nodes; innerHTML is used solely for constant SVGs (icons below, pets.js).
 const api = window.agentdeck;
+// Which window this page is: Main, a board (?board=<id>), Settings (?view=settings) or the carried pet (?view=carry).
+const PARAMS = new URLSearchParams(location.search);
+const BOARD_ID = PARAMS.get('board');
+const VIEW = BOARD_ID ? 'board' : ['settings', 'carry'].includes(PARAMS.get('view')) ? PARAMS.get('view') : 'main';
+document.documentElement.classList.add(`v-${VIEW}`);
+// The cards this page shows: its board's (a board window), or the board opened on Main's card, or Main's own.
+const myBoard = () => (VIEW === 'board' ? BOARD_ID : (state && state.ui.boardView) || null);
+const onDeck = (cards) => cards.filter((c) => (c.board || null) === myBoard());
 const T = window.FlockletThemes;
 const P = window.FlockletPets;
 const EPOCH = Date.now();
@@ -92,20 +100,84 @@ function ago(ts) {
 const timer = (ts, prefix = '') => h('span', { class: 'timer', 'data-since': ts, 'data-prefix': prefix }, prefix + ago(ts));
 
 // ---------- pieces ----------
-function header({ counts, ui }) {
+function header({ ui }, deck) {
+  const counts = G.count(deck);
   const status = counts.waiting ? 'waiting' : counts.working ? 'working' : 'quiet';
   const logo = h('span', { class: 'logo', title: 'Flocklet' });
   logo.innerHTML = P.petSvg('chick'); // constant markup only
   logo.append(h('span', { class: `dot ${status}` }));
   return h('header', { class: 'header' },
-    logo,
-    h('span', { class: 'title' }, 'Flocklet'),
+    ui.board ? h('button', { class: 'vback', title: 'Back to Main', onclick: () => api.board({ op: 'view', id: null }) }, icon('back'), 'Main') : logo,
+    ui.board ? boardName(ui.board) : h('span', { class: 'title' }, 'Flocklet'),
     !ui.collapsed && h('span', { class: 'count' }, String(counts.working + counts.waiting + counts.done)),
     h('span', { class: 'spacer' }),
+    ui.board && btn('popout', 'Pop out into its own window', () => api.board({ op: 'popout', id: ui.board.id })),
     btn(ui.muted ? 'mute' : 'sound', ui.muted ? 'Sound off (click to turn on)' : 'Sound on (click to mute)', () => api.set({ muted: !ui.muted })),
     btn('dock', 'Pet dock: only the pets, like a taskbar', () => api.set({ dock: true })),
     btn(ui.collapsed ? 'down' : 'up', ui.collapsed ? 'Expand' : 'Collapse', () => api.set({ collapsed: !ui.collapsed })),
     btn('minimise', 'Minimise to tray (click the tray chick or Ctrl+Alt+A to bring it back)', () => api.hide()));
+}
+
+// ---------- boards (src/boards.js): a board window's header, its name and its style ----------
+let renaming = false;
+let boardStyleOpen = false;
+// Click the name to rename it; Enter or clicking away saves, Escape keeps the old one.
+function boardName(b) {
+  if (renaming) {
+    return h('input', { class: 'text bname', 'data-focus': 'bname', value: b.name, maxlength: '40', 'aria-label': 'Board name',
+      onkeydown: (e) => { if (e.key === 'Enter') e.target.blur(); else if (e.key === 'Escape') { e.target.value = b.name; e.target.blur(); } },
+      onblur: (e) => {
+        renaming = false;
+        const v = e.target.value.trim();
+        if (v && v !== b.name) api.board({ op: 'rename', id: b.id, name: v });
+        render();
+      } });
+  }
+  return h('button', { class: 'title bname', title: 'Click to rename', onclick: () => { renaming = true; focusAfterRender = 'bname'; render(); } }, b.name);
+}
+function boardHeader({ ui }, deck) {
+  const b = ui.board || { id: BOARD_ID, name: 'Board' };
+  const n = G.count(deck);
+  const status = n.waiting ? 'waiting' : n.working ? 'working' : 'quiet';
+  return h('header', { class: 'header bheader' },
+    h('span', { class: `bdot ${status}` }),
+    boardName(b),
+    h('span', { class: 'count' }, String(n.working + n.waiting + n.done)),
+    h('span', { class: 'spacer' }),
+    btn('brush', 'Style of this board', () => { boardStyleOpen = !boardStyleOpen; render(); }, { class: `ib${boardStyleOpen ? ' on' : ''}` }),
+    btn('more', 'More: put inside Main, same style as Main, delete', () => api.boardMenu(b.id)),
+    btn('minimise', 'Hide this board (its button in the sidebar brings it back)', () => api.board({ op: 'hide', id: b.id })));
+}
+// A style tile (a ready-made palette + font). Hover previews it, click picks it.
+function styleTile(t, pr) {
+  const look = T.LOOKS.find((l) => l.id === pr.look);
+  const aa = h('span', { class: 'paa' }, 'Aa');
+  aa.style.fontFamily = look.font;
+  const on = t.palette === pr.palette && t.look === pr.look;
+  return h('button', { class: `ptile${on ? ' on' : ''}`, title: pr.blurb, ...hoverPreview({ ...t, palette: pr.palette, look: pr.look }),
+    onclick: () => pickTheme({ ...t, palette: pr.palette, look: pr.look }) }, swatchDot(pr, 'pdot'), aa, h('span', { class: 'pname2' }, pr.name));
+}
+// A board's own style, right on the board: tiles, shuffle, light/dark, or back to Main's style.
+function boardStyle(ui) {
+  const t = ui.theme || T.DEFAULT;
+  const b = ui.board;
+  return h('div', { class: 'bstyle', onmouseleave: previewOff },
+    h('div', { class: 'ptiles' }, T.PRESETS.map((pr) => styleTile(t, pr))),
+    h('div', { class: 'btnrow' },
+      h('button', { class: 'b', title: 'A new style that goes well together', onclick: () => pickTheme(T.shuffle(t, {})) }, 'Shuffle'),
+      h('div', { class: 'seg' }, T.MODES.map((m) =>
+        h('button', { class: `segb${t.mode === m.id ? ' on' : ''}`, ...hoverPreview({ ...t, mode: m.id }), onclick: () => pickTheme({ ...t, mode: m.id }) }, m.name)))),
+    b && b.ownTheme
+      ? h('button', { class: 'b ghostb', onclick: () => { preview = null; api.board({ op: 'theme', id: b.id, theme: null }); } }, 'Same style as Main')
+      : h('div', { class: 'hint' }, 'Looks like Main until you pick a style here.'));
+}
+function settingsWinHeader(ui) {
+  return h('header', { class: 'header' },
+    h('span', { class: 'sgear' }, icon('gear')),
+    h('span', { class: 'title' }, ui.settingsAdvanced ? 'All settings' : 'Settings'),
+    ui.board && h('span', { class: 'stylefor', title: 'The style you pick here goes to this board' }, `\u00b7 ${ui.board.name}`),
+    h('span', { class: 'spacer' }),
+    btn('close', 'Close settings', () => api.set({ settingsOpen: false })));
 }
 
 // ---------- minimised bar ----------
@@ -168,10 +240,10 @@ function themer(ui) {
 // Hover a style choice: the real panel shows it until the pointer leaves (nothing is saved until you click).
 let preview = null;
 const systemDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
-function previewOn(theme) { preview = T.normalizeTheme(theme); applyTheme(state.ui); }
-function previewOff() { if (!preview) return; preview = null; applyTheme(state.ui); }
+function previewOn(theme) { preview = T.normalizeTheme(theme); applyTheme(state.ui); if (VIEW === 'settings') api.preview(preview); }
+function previewOff() { if (!preview) return; preview = null; applyTheme(state.ui); if (VIEW === 'settings') api.preview(null); }
 const hoverPreview = (theme) => ({ onmouseenter: () => previewOn(theme), onmouseleave: previewOff });
-function pickTheme(theme) { preview = null; api.set({ theme }); }
+function pickTheme(theme) { preview = null; if (VIEW === 'settings') api.preview(null); api.set({ theme }); }
 
 function applyTheme(ui) {
   const t = preview || ui.theme || T.DEFAULT;
@@ -588,6 +660,18 @@ function dockView(cards, ui) {
 // ---------- sidebar rail + drawers ----------
 // The rail sits on one side of the deck (ui.rail); its drawer opens outward beyond it (main sizes the window).
 const openDrawer = (name) => { menuFor = null; api.set({ drawer: state.ui.drawer === name ? null : name }); };
+// A board's button: its colours and first letter; click shows or hides it, right-click for more.
+function boardButton(b, cards) {
+  const pal = T.PALETTES.find((p) => p.id === (b.theme || {}).palette) || T.PALETTES[0];
+  const waiting = cards.filter((c) => c.board === b.id && c.group === 'active' && c.state === 'waiting').length;
+  const sq = h('span', { class: 'bsq' }, (b.name.trim()[0] || 'B').toUpperCase());
+  sq.style.setProperty('--s-bg', pal.swatch.bg);
+  sq.style.setProperty('--s-acc', pal.swatch.accent);
+  return h('button', { class: `rbtn rboard${b.visible ? ' on' : ''}`, 'aria-pressed': b.visible ? 'true' : 'false', 'aria-label': b.name,
+    title: `${b.name}${waiting ? ` (${waiting} need${waiting > 1 ? '' : 's'} you)` : ''}: click to ${b.visible ? 'hide' : 'show'} · right-click for more`,
+    onclick: () => api.board({ op: 'toggle', id: b.id }), oncontextmenu: (e) => { e.preventDefault(); api.boardMenu(b.id); } },
+  sq, waiting > 0 && h('span', { class: 'rdot' }));
+}
 function railButton(name, iconName, label, badge) {
   const on = state.ui.drawer === name;
   return h('button', { class: `rbtn${on ? ' on' : ''}`, title: on ? `Close ${label}` : label, 'aria-label': label,
@@ -627,14 +711,7 @@ function simpleSettings(ui) {
   const lockChip = (k, label) => h('button', { class: `lock${shuffleLocks[k] ? ' on' : ''}`, 'aria-pressed': shuffleLocks[k] ? 'true' : 'false',
     title: shuffleLocks[k] ? `${label} stays when you shuffle` : `Keep the ${label.toLowerCase()} when you shuffle`,
     onclick: () => { shuffleLocks[k] = !shuffleLocks[k]; render(); } }, shuffleLocks[k] ? `Keep ${label.toLowerCase()} \u2713` : `Keep ${label.toLowerCase()}`);
-  const presetTile = (pr) => {
-    const look = T.LOOKS.find((l) => l.id === pr.look);
-    const aa = h('span', { class: 'paa' }, 'Aa');
-    aa.style.fontFamily = look.font;
-    const on = t.palette === pr.palette && t.look === pr.look;
-    return h('button', { class: `ptile${on ? ' on' : ''}`, title: pr.blurb, ...hoverPreview({ ...t, palette: pr.palette, look: pr.look }),
-      onclick: () => pickTheme({ ...t, palette: pr.palette, look: pr.look }) }, swatchDot(pr, 'pdot'), aa, h('span', { class: 'pname2' }, pr.name));
-  };
+  const presetTile = (pr) => styleTile(t, pr);
   const zi = Math.max(0, ZOOMS.findIndex(([z]) => z === (ui.zoom || 1)));
   return [
     h('section', null, h('div', { class: 'slabel' }, 'Style'),
@@ -688,7 +765,7 @@ function advancedSettings(ui) {
         h('button', { class: `segb${!ui.dock && ui.collapsed ? ' on' : ''}`, onclick: () => api.set({ dock: false, collapsed: true }) }, 'Minimised'),
         h('button', { class: `segb${ui.dock ? ' on' : ''}`, onclick: () => api.set({ dock: true }) }, 'Pet dock'))),
     h('section', null, h('div', { class: 'slabel' }, 'Order'),
-      h('div', { class: 'hint' }, 'Drag a card, a pet or a group name to move it. A parent takes its children along.'),
+      h('div', { class: 'hint' }, 'Drag a card, a pet or a group name to move it. A parent takes its children along. Drag one out of the panel to make a board.'),
       ui.ordered && h('div', { class: 'btnrow' },
         h('button', { class: 'b', onclick: () => api.order({ reset: true }) }, 'Back to automatic order')),
       ui.ordered && h('div', { class: 'hint' }, 'Automatic: sessions that need you first, then the most recent.')),
@@ -732,6 +809,14 @@ function advancedSettings(ui) {
 }
 function renderShell(cards, ui) {
   const shell = document.getElementById('shell');
+  if (VIEW !== 'main') { // a board or Settings: just the panel, no sidebar
+    shell.className = 'shell solo';
+    shell.style.setProperty('--deckw', `${ui.width || 340}px`);
+    if (VIEW === 'board' && ui.deckHeight != null) shell.style.setProperty('--deckh', `${ui.deckHeight - 24}px`); else shell.style.removeProperty('--deckh');
+    document.getElementById('rail').replaceChildren();
+    document.getElementById('drawer').hidden = true;
+    return;
+  }
   const side = ui.rail || 'left';
   shell.className = `shell side-${side}${ui.dock ? ' docked' : ui.collapsed ? ' minimised' : ''}${ui.drawer && !ui.dock ? ' open' : ''}`;
   document.body.classList.toggle('docked', !!ui.dock);
@@ -744,17 +829,22 @@ function renderShell(cards, ui) {
     rail.replaceChildren(h('button', { class: 'rexpand', title: 'Show the sidebar', 'aria-label': 'Show the sidebar',
       onclick: () => api.set({ railMin: false }) }, icon('sidebar')));
   } else {
-    rail.replaceChildren(
+    const boards = ui.boards || [];
+    rail.replaceChildren(...[
       railButton('sessions', 'list', 'Sessions', cards.length),
+      boards.length > 0 && h('div', { class: 'rboards' }, boards.map((b) => boardButton(b, cards)),
+        btn('layers', 'All boards: hide them, bring back the ones you hid, show them', () => api.boardMenu(null), { class: 'ib small rall' })),
       h('span', { class: 'spacer' }),
-      railButton('settings', 'gear', 'Settings'),
+      h('button', { class: `rbtn${ui.settingsOpen ? ' on' : ''}`, title: ui.settingsOpen ? 'Close settings' : 'Settings', 'aria-label': 'Settings',
+        'aria-pressed': ui.settingsOpen ? 'true' : 'false', onclick: () => api.set({ settingsOpen: !ui.settingsOpen }) }, icon('gear')),
       btn('minimise', 'Minimise the sidebar', () => api.set({ railMin: true }), { class: 'ib small rmin' }),
-      h('div', { class: 'rgrip', id: 'rgrip', title: 'Drag to another side of the panel' }, icon('grip')));
+      h('div', { class: 'rgrip', id: 'rgrip', title: 'Drag to another side of the panel' }, icon('grip')),
+    ].filter(Boolean));
   }
   const drawer = document.getElementById('drawer');
-  drawer.hidden = !ui.drawer || !!ui.dock || !!ui.railMin; // drawers open while minimised too, not in the pet dock
+  drawer.hidden = ui.drawer !== 'sessions' || !!ui.dock || !!ui.railMin; // opens while minimised too, not in the pet dock
   if (drawer.hidden) drawer.replaceChildren();
-  else drawer.replaceChildren(ui.drawer === 'sessions' ? browser(cards, ui) : settingsDrawer(ui));
+  else drawer.replaceChildren(browser(cards, ui));
 }
 
 // Drag the rail's dots to dock it on another side: the side of the panel nearest the pointer wins.
@@ -795,24 +885,38 @@ function renderShell(cards, ui) {
 })();
 
 // ---------- render ----------
+let lastKeys = null; // the cards on this page last time: new ones pop in
 function render() {
   if (holdRender || carryHold) { renderMissed = true; return; }
+  if (VIEW === 'carry' || !state) return;
   const { cards, ui, hooks } = state;
+  const deck = onDeck(cards);
   const panel = document.getElementById('panel');
   const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.focus : null;
   const caret = focused ? document.activeElement.selectionStart : null;
-  panel.className = `panel${ui.dock ? ' dock' : ui.collapsed ? ' collapsed' : ''}${ui.fixedHeight ? ' fixed' : ''}`;
   applyTheme(ui);
-  const kids = ui.dock ? dockView(cards, ui).filter(Boolean) : [header(state)];
-  if (ui.dock) { /* pet dock: nothing else */ } else if (ui.collapsed) kids.push(miniBar(cards));
-  if (ui.collapsed && !ui.dock) kids.push(miniList(cards, ui.miniList)); // always built, so its full height can be measured
-  if (!ui.collapsed && !ui.dock) {
-    if (!hooks.ok) kids.push(h('div', { class: 'banner' }, `Live updates off: ${hooks.error}. Showing session list only.`));
-    const active = cards.filter((c) => c.group === 'active');
-    const items = G.fold(G.arrange(active, ui.groupBy, { all: cards, groups: ui.groups, folderOrder: ui.folderOrder }), ui.folded);
-    kids.push(h('div', { class: 'list', 'data-scroll': 'deck' }, items.length
-      ? items.map((it) => (it.type === 'header' ? groupHeader(it) : withPetMenu(it.type === 'ghost' ? ghostRow(it.card, it.depth, it) : card(it.card, it.depth, it), it.card, it.depth, 'deck')))
-      : h('div', { class: 'empty' }, 'No agent is working right now. Pin sessions from Sessions in the sidebar to keep them here.')));
+  let kids;
+  if (VIEW === 'settings') {
+    panel.className = 'panel settingswin';
+    kids = [settingsWinHeader(ui), settingsDrawer(ui)];
+  } else {
+    panel.className = `panel${ui.dock ? ' dock' : ui.collapsed ? ' collapsed' : ''}${ui.fixedHeight ? ' fixed' : ''}`;
+    kids = ui.dock ? dockView(deck, ui).filter(Boolean) : [VIEW === 'board' ? boardHeader(state, deck) : header(state, deck)];
+    if (VIEW === 'board' && boardStyleOpen) kids.push(boardStyle(ui));
+    if (ui.dock) { /* pet dock: nothing else */ } else if (ui.collapsed) kids.push(miniBar(cards));
+    if (ui.collapsed && !ui.dock) kids.push(miniList(deck, ui.miniList)); // always built, so its full height can be measured
+    if (!ui.collapsed && !ui.dock) {
+      if (!hooks.ok) kids.push(h('div', { class: 'banner' }, `Live updates off: ${hooks.error}. Showing session list only.`));
+      const active = deck.filter((c) => c.group === 'active');
+      let items = G.fold(G.arrange(active, ui.groupBy, { all: cards, groups: ui.groups, folderOrder: ui.folderOrder }), ui.folded);
+      // a board with one project or group: its header would only repeat the board's name
+      if (myBoard() && items.filter((it) => it.type === 'header').length === 1 && !items.some((it) => it.folded)) items = items.filter((it) => it.type !== 'header');
+      const empty = myBoard() ? 'Nothing here right now. Drag a group or a session onto this board.'
+        : 'No agent is working right now. Pin sessions from Sessions in the sidebar to keep them here.';
+      kids.push(h('div', { class: 'list', 'data-scroll': 'deck' }, items.length
+        ? items.map((it) => (it.type === 'header' ? groupHeader(it) : withPetMenu(it.type === 'ghost' ? ghostRow(it.card, it.depth, it) : card(it.card, it.depth, it), it.card, it.depth, 'deck')))
+        : h('div', { class: 'empty' }, empty)));
+    }
   }
   // render() rebuilds the DOM, which resets every list to the top: keep each scroll position.
   const scrolls = new Map([...document.querySelectorAll('[data-scroll]')].map((el) => [el.dataset.scroll, el.scrollTop]));
@@ -822,6 +926,7 @@ function render() {
     if (scrolls.has(el.dataset.scroll)) el.scrollTop = scrolls.get(el.dataset.scroll);
   }
   if (afterRender) { const f = afterRender; afterRender = null; f(); }
+  popNew(panel);
   const live = new Set(cards.map((c) => c.waiting && c.waiting.id).filter(Boolean));
   for (const id of drafts.keys()) if (!live.has(id)) drafts.delete(id);
   const want = focusAfterRender || focused;
@@ -835,6 +940,20 @@ function render() {
     if (deny && document.activeElement === document.body) deny.focus();
   }
   requestAnimationFrame(reportSize);
+}
+
+// A card that just arrived (a new session, or one dropped here from another board) pops in.
+function popNew(panel) {
+  const els = [...panel.querySelectorAll('[data-k]')];
+  const now = new Set(els.map((el) => el.dataset.k));
+  if (lastKeys && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    for (const el of els) {
+      if (lastKeys.has(el.dataset.k)) continue;
+      el.animate([{ transform: 'scale(0.6)', opacity: 0 }, { transform: 'scale(1.03)', opacity: 1, offset: 0.7 }, { transform: 'none', opacity: 1 }],
+        { duration: 320, easing: 'ease-out' });
+    }
+  }
+  lastKeys = now;
 }
 
 // Re-rendering replaces DOM nodes, so never do it mid-click or while typing.
@@ -926,6 +1045,13 @@ for (const el of document.querySelectorAll('.rz')) {
 
 function reportSize() {
   const panel = document.getElementById('panel');
+  if (VIEW === 'carry') return;
+  if (VIEW === 'settings') {
+    const head = panel.querySelector('.header');
+    const body = panel.querySelector('.settings');
+    api.resize(Math.ceil((head ? head.offsetHeight : 0) + (body ? body.scrollHeight : 0)) + 26, {});
+    return;
+  }
   let height = 0;
   let listFull = 0;
   for (const el of panel.children) {
@@ -986,6 +1112,8 @@ function detectTransitions(cards) {
   if (sound) chime(sound);
 }
 
+api.onDropzone((on) => document.getElementById('panel').classList.toggle('dropzone', on));
+api.onPreview((t) => { if (VIEW !== 'main' || !state) return; preview = t ? T.normalizeTheme(t) : null; applyTheme(state.ui); });
 api.onState((s) => {
   state = s;
   detectTransitions(s.cards);

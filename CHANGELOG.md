@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.0
+
+- Boards (`src/boards.js`): workspaces made by dragging a project, group or session out of a window. Projects and
+  groups move as rules (their new sessions follow); single sessions are placed one by one
+  (`cfg.sessionBoard`, beats the rules); a child follows its parent. Board windows (`index.html?board=<id>`) with
+  their own name, style, width and height; a board can also live inside Main (`cfg.view`).
+- Drag between windows: the page keeps the pointer and reports its screen position (`ui:carry`); main moves a
+  click-through carry window with the pet and lights up the window under it. Drop on a board or Main = move there,
+  on the desktop = new board.
+- Magnet: a board released near Main sticks to that side (`stuck: {side, along}`) and follows Main's window,
+  hides with it.
+- Sidebar: a button per board (show / hide, right-click menu), all-boards menu (hide all, bring back the ones you
+  hid, show all). Main's header shows the board on its card with "Back to Main" and pop out.
+- Theme per board (`board.theme`, null = same as Main); Main, the sidebar and Settings follow the board you view.
+- Settings moved out of the drawer into its own window (`cfg.settingsOpen`, `cfg.settingsPos`); hover previews are
+  relayed to the panel it styles. The drawer is Sessions only.
+- The sidebar is a drag region (moves Main). Scroll bars restyled (slim, no track, brighter on hover, accent while
+  dragged).
+- Dev only: `FLOCKLET_FAKE=<json>` feeds fake sessions to every window of the dev copy (tests).
+
 ## 0.5.0
 
 - Drag to reorder (`renderer/carry.js`): cards inside their section, projects / groups among each other,

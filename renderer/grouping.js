@@ -218,7 +218,7 @@
     return [...rest.slice(0, at), ...unit, ...rest.slice(at)];
   }
 
-  const api = { MODES, applyOrder, placeBlock, reorderBlock, unitEnd, moveUnit, decorate, count, search, arrange, forest, folderName, projectRoot, fold, foldKeyOf, stateCounts, STATE_ORDER };
+  const api = { MODES, folderKey, applyOrder, placeBlock, reorderBlock, unitEnd, moveUnit, decorate, count, search, arrange, forest, folderName, projectRoot, fold, foldKeyOf, stateCounts, STATE_ORDER };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AgentDeckGrouping = api;
 })(typeof window !== 'undefined' ? window : this);

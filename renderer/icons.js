@@ -21,6 +21,9 @@
     sidebar: '<svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="2" /><path d="M6.5 3v10" /></svg>',
     grip: '<svg viewBox="0 0 16 16"><path d="M6 4h.01M10 4h.01M6 8h.01M10 8h.01M6 12h.01M10 12h.01" stroke-width="2.4" /></svg>',
     refresh: '<svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.8v2.9h-2.9" /></svg>',
+    back: '<svg viewBox="0 0 16 16"><path d="M9.5 4 5.5 8l4 4" /></svg>',
+    popout: '<svg viewBox="0 0 16 16"><path d="M9 2.5h4.5V7M13.5 2.5 8 8M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3" /></svg>',
+    layers: '<svg viewBox="0 0 16 16"><path d="M8 2.5 14 5.5 8 8.5 2 5.5z" /><path d="M2 8.5l6 3 6-3" /><path d="M2 11.2l6 3 6-3" /></svg>',
     brush: '<svg viewBox="0 0 16 16"><path d="M13.5 2.5 7.8 8.2M9.3 9.7 6.3 6.7M6.3 9.7c-1.6-.3-3 .7-3 2.3 0 .6-.3 1-.8 1.3 1.7.7 4.3.3 4.8-1.7" /></svg>',
   };
 

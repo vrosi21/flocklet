@@ -1,9 +1,13 @@
 // Drag to reorder (decided 2026-11-23): pick up a card, a pet in the dock, or a group by its name, and carry
 // it to a new spot among its siblings (inside its own group; a parent takes its children along). While carried,
 // the card folds into its pet, which dangles under the pointer; the others make room. The new order goes to
-// main (G.placeBlock) and shows at once (G.reorderBlock). Loaded after app.js and uses its globals
-// (state, api, G, P, h, pet, render, emote, carryHold, afterRender, renderMissed, petFor, menuFor).
+// main (G.placeBlock) and shows at once (G.reorderBlock). Drag it out of the window and its pet follows the
+// pointer across the screen (a small window main moves): drop it on a board or Main to move it there, or on the
+// empty desktop to make a new board (src/boards.js). Loaded after app.js and uses its globals
+// (state, api, VIEW, onDeck, G, P, h, pet, render, emote, carryHold, afterRender, renderMissed, petFor, menuFor).
 (function () {
+  if (VIEW === 'carry') { carryPage(); return; }
+  if (VIEW === 'settings') return;
   const START_PX = 6; // a press that moves less than this is a click
   const NEST_H = 46; // the landing spot in the panel, while you carry
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -21,7 +25,7 @@
   function layout(where) {
     const ui = state.ui;
     const mode = where === 'dock' && ui.groupBy === 'tree' ? 'none' : ui.groupBy;
-    const active = state.cards.filter((c) => c.group === 'active');
+    const active = onDeck(state.cards).filter((c) => c.group === 'active');
     const secs = [];
     let cur = null;
     for (const it of G.arrange(active, mode, { all: state.cards, groups: ui.groups, folderOrder: ui.folderOrder })) {
@@ -70,7 +74,7 @@
       if (mode !== 'folder' && mode !== 'custom') return null;
       const movable = (s) => s.key != null && !(mode === 'custom' && s.key === ''); // "Ungrouped" stays last
       const si = secs.findIndex((s) => s.key === p.key);
-      if (si < 0 || !movable(secs[si])) return null;
+      if (si < 0 || secs[si].key == null) return null;
       const elsOf = (s) => (p.where === 'dock'
         ? [box.querySelector(`:scope > .dgroup[data-h="${esc(s.key)}"]`)].filter(Boolean) : sectionEls(box, s.key));
       const units = [];
@@ -78,7 +82,8 @@
       const mine = elsOf(secs[si]);
       if (!mine.length) return null;
       const cards = secs[si].items.filter((x) => !x.ghost).map((x) => x.card);
-      d = { kind: 'group', si, units, mine, sec: secs[si], cards, card: cards[0] || secs[si].items[0].card };
+      // "Ungrouped" can leave the panel (as a board) but keeps its place among the groups
+      d = { kind: 'group', si, units, mine, sec: secs[si], cards, card: cards[0] || secs[si].items[0].card, fixed: !movable(secs[si]) };
       d.orig = units.findIndex((u) => u.j > si);
     }
     if (d.orig < 0) d.orig = d.units.length;
@@ -118,6 +123,7 @@
     d.x = r0 ? r0.left + r0.width / 2 - d.cw / 2 : d.px - d.cw / 2;
     d.y = r0 ? r0.top : d.py - d.ch / 2;
     carrier.style.transform = `translate(${d.x}px, ${d.y}px)`;
+    api.carry({ op: 'start', info: carryInfo(d) }); // main readies the pet that follows you outside this window
     anim(body.firstChild, [{ transform: 'scale(0.85)' }, { transform: 'scale(1.2) translateY(-3px)', offset: 0.45 }, { transform: 'none' }],
       { duration: 280, easing: 'ease-out' });
 
@@ -172,7 +178,20 @@
     const st = 1 + Math.max(-0.07, Math.min(0.1, d.vy * 0.012));
     d.carrier.style.transform = `translate(${d.x}px, ${d.y}px)`;
     d.body.style.transform = still() ? '' : `rotate(${d.ang.toFixed(2)}deg) scale(${(2 - st).toFixed(3)}, ${st.toFixed(3)})`;
-    if (d.ready) { autoScroll(d); moveNest(d, slotAt(d)); }
+    // out of this window: the pet hops into a window of its own that follows the pointer; back in, it returns
+    const out = d.ready && (d.px < 0 || d.py < 0 || d.px >= innerWidth || d.py >= innerHeight);
+    if (out !== !!d.out) {
+      d.out = out;
+      api.carry({ op: out ? 'out' : 'in', x: d.sx, y: d.sy });
+      d.carrier.classList.toggle('gone', out);
+      d.nest.classList.toggle('away', out);
+      if (out) moveNest(d, d.orig);
+    } else if (out && (d.sx !== d.sentX || d.sy !== d.sentY)) {
+      api.carry({ op: 'move', x: d.sx, y: d.sy });
+    }
+    d.sentX = d.sx;
+    d.sentY = d.sy;
+    if (d.ready && !d.out) { autoScroll(d); if (!d.fixed) moveNest(d, slotAt(d)); }
     d.raf = requestAnimationFrame(frame);
   }
 
@@ -237,8 +256,15 @@
     const d = drag;
     if (!d || d.landing) return;
     cancelAnimationFrame(d.raf);
+    if (d.out && commit) { leave(d); return; }
+    if (d.out) { // Escape outside: it comes back home
+      d.out = false;
+      api.carry({ op: 'in' });
+      d.carrier.classList.remove('gone');
+      d.nest.classList.remove('away');
+    }
     placeNest(d);
-    if (commit) moveNest(d, slotAt(d)); else moveNest(d, d.orig);
+    if (commit && !d.fixed) moveNest(d, slotAt(d)); else moveNest(d, d.orig);
     d.landing = true;
     const moved = commit && d.slot !== d.orig;
     await land(d);
@@ -298,6 +324,44 @@
     return m;
   }
 
+  // What leaves the window: a card with its children, or a whole group (a project or your group moves as a rule,
+  // so its new sessions follow it; "Ungrouped" moves its cards).
+  function itemsOf(d) {
+    if (d.kind === 'card') {
+      const keys = d.sec.items.slice(d.i, d.end).map((x) => x.key);
+      return { keys, name: d.card.name || 'Board' };
+    }
+    const keys = d.sec.items.map((x) => x.key);
+    const it = { keys, name: d.sec.label || 'Board' };
+    if (d.mode === 'folder') it.project = d.sec.key;
+    if (d.mode === 'custom' && d.sec.key) it.group = d.sec.key;
+    return it;
+  }
+  function carryInfo(d) {
+    const cards = d.kind === 'card' ? [d.card] : d.cards.slice(0, 3);
+    return {
+      pets: cards.map((c) => ({ kind: c.pet, slot: c.colorSlot || P.colorSlot(c.hue) })),
+      badge: d.kind === 'card' ? (d.extra > 0 ? `+${d.extra}` : '') : String(d.cards.length),
+      label: d.kind === 'group' ? d.sec.label || '' : '',
+      theme: state.ui.theme, mode: document.documentElement.dataset.mode,
+    };
+  }
+  // Dropped outside this window: main moves it (or makes a board); here it is gone at once.
+  function leave(d) {
+    d.landing = true;
+    const items = itemsOf(d);
+    api.carry({ op: 'drop', x: d.sx, y: d.sy, items });
+    const gone = new Set(items.keys);
+    state.cards = state.cards.map((c) => (gone.has(c.key) ? { ...c, board: '(moving)' } : c));
+    d.carrier.remove();
+    d.nest.remove();
+    document.documentElement.classList.remove('carrying');
+    drag = null;
+    carryHold = false;
+    renderMissed = false;
+    render();
+  }
+
   // Save the new order: one section's keys (cards), or the projects / your groups (a group).
   function save(d) {
     const ui = state.ui;
@@ -329,6 +393,7 @@
   function settle(d, from, moved) {
     document.documentElement.classList.remove('carrying');
     if (drag === d) drag = null;
+    api.carry({ op: 'end' });
     const box = d.where === 'dock' ? dockBox() : deckBox();
     const done = () => d.carrier.remove();
     if (!box) { done(); return; }
@@ -388,6 +453,8 @@
       if (e.buttons === 0 && !drag.landing) { finish(true); return; } // the release happened where we did not hear it
       drag.px = e.clientX;
       drag.py = e.clientY;
+      drag.sx = e.screenX; // screen position, for the pet that follows you outside this window
+      drag.sy = e.screenY;
       return;
     }
     if (!press || e.pointerId !== press.id) return;
@@ -400,13 +467,15 @@
     swallowClick = true;
     d.px = e.clientX;
     d.py = e.clientY;
+    d.sx = e.screenX;
+    d.sy = e.screenY;
     try { document.body.setPointerCapture(e.pointerId); } catch { /* the pointer is already gone */ }
     lift(d);
     d.raf = requestAnimationFrame(frame);
   });
   window.addEventListener('pointerup', () => { press = null; if (drag) finish(true); });
   window.addEventListener('pointercancel', () => { press = null; if (drag) finish(false); });
-  window.addEventListener('blur', () => { press = null; if (drag) finish(true); });
+  window.addEventListener('blur', () => { press = null; if (drag && !drag.out) finish(true); }); // outside, the pointer is still ours
   window.addEventListener('keydown', (e) => {
     if (drag && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
   }, true);
@@ -416,4 +485,46 @@
     e.preventDefault();
     e.stopPropagation();
   }, true);
+
+  // ---- the carry window (?view=carry): the pet you carry between windows. Main moves this window with the
+  // pointer; the pet swings with how fast the window moves, and lands with a squish when you let go.
+  function carryPage() {
+    let body = null;
+    let lastX = null;
+    let ang = 0;
+    let av = 0;
+    document.body.replaceChildren();
+    api.onCarry((m) => {
+      if (m.op === 'set') {
+        const info = m.info;
+        const ds = document.documentElement.dataset;
+        ds.palette = info.theme.palette;
+        ds.look = info.theme.look;
+        ds.mode = info.mode;
+        const pets = info.pets.map((x) => { const el = pet(x.kind, 'carry'); el.style.setProperty('--pc', `var(--g${x.slot})`); return el; });
+        body = h('div', { class: 'cbody' }, pets.length > 1 ? h('div', { class: 'huddle' }, pets) : pets[0],
+          info.badge && h('span', { class: 'cbadge' }, info.badge), info.label && h('span', { class: 'ctag' }, info.label));
+        document.body.replaceChildren(h('div', { class: `carrier${pets.length > 1 ? ' flock' : ''}` }, body));
+        lastX = window.screenX;
+        ang = 0;
+        av = 0;
+      } else if (m.op === 'land' && body) {
+        body.animate([{ transform: 'none', opacity: 1 }, { transform: 'scale(1.15, 0.8)', opacity: 1, offset: 0.4 }, { transform: 'scale(0.4) translateY(10px)', opacity: 0 }],
+          { duration: 300, easing: 'ease-in', fill: 'forwards' });
+      }
+    });
+    const tick = () => {
+      if (body && !matchMedia('(prefers-reduced-motion: reduce)').matches) { // (this page returns before `still`)
+        const x = window.screenX;
+        const vx = lastX == null ? 0 : x - lastX;
+        lastX = x;
+        const want = Math.max(-30, Math.min(30, vx * 1.6));
+        av = (av + (want - ang) * 0.16) * 0.8;
+        ang += av;
+        body.style.transform = `rotate(${ang.toFixed(2)}deg)`;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
 })();
