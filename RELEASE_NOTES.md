@@ -1,6 +1,5 @@
-- **Boards.** Drag a project, a group or a single session out of the panel and it becomes a board of its own, right where you drop it. Each board has its own name (click it to rename) and its own style (the brush on the board). Drag sessions between boards and Main whenever you like; new sessions of a project follow its board.
-- **Magnet.** Drop a board next to the panel and it sticks there and moves with it. Pull it away and it floats free.
-- **Board buttons in the sidebar.** One per board: click to show or hide it, right-click to put it inside the main panel, pop it out, or delete it. A menu hides all boards, brings back the ones you hid, or shows them all.
-- **Settings in its own window.** It opens beside the sidebar and you can move it anywhere. When the panel shows a board, Settings styles that board.
-- **Move Flocklet by its sidebar** too, not only by its header.
-- **Slimmer scroll bars** that stay out of the way until you point at a list.
+- **Sessions and Settings are one card again**, with two tabs. Drag its dots to dock it on any side of the panel, on its own or on the same side as the sidebar. It always stays attached.
+- **Boards live in the sidebar.** The top part has tabs for the main card: Main, the boards that live on it, and + for a new board. The part below has an on/off toggle for each board in its own window.
+- **Move things by dropping them.** Drop a session on a tab or a toggle to move it to that board, or on + to make a new board. Drag a tab out of Flocklet to give that board its own window. Drag a board window onto the panel, or its toggle onto the tabs, to put it back on the main card. A board window also has a "Move into Main" button.
+- **Scroll bars are back** and always visible: a rounded thumb on a faint track.
+- **Fix:** closing Flocklet with `--quit` when it was not running started it instead.

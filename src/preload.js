@@ -25,8 +25,6 @@ contextBridge.exposeInMainWorld('agentdeck', {
   boardMenu: (id) => ipcRenderer.send('ui:boardMenu', id == null ? null : String(id)),
   carry: (op) => ipcRenderer.send('ui:carry', op),
   onCarry: (cb) => ipcRenderer.on('carry', (_e, m) => cb(m)),
-  preview: (theme) => ipcRenderer.send('ui:preview', theme || null),
-  onPreview: (cb) => ipcRenderer.on('preview', (_e, t) => cb(t)),
   onDropzone: (cb) => ipcRenderer.on('dropzone', (_e, on) => cb(on === true)),
   quiet: (key, on) => ipcRenderer.send('ui:quiet', key, on),
   pet: (key, kind) => ipcRenderer.send('ui:pet', key, kind),

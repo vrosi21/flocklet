@@ -48,7 +48,7 @@ const PORT = DEV ? 4778 : 4777;
 // Dev copy, tests only: sessions from a JSON file instead of Claude (FLOCKLET_FAKE=<file>), so every window shows them.
 const FAKE = DEV && process.env.FLOCKLET_FAKE ? (() => { try { return JSON.parse(fs.readFileSync(process.env.FLOCKLET_FAKE, 'utf8')); } catch { return null; } })() : null;
 const PanelSize = require('./panelSize');
-const DRAWERS = ['sessions']; // Settings has its own window now (it moves on its own, beside or away from the sidebar)
+const DRAWERS = ['sessions', 'settings']; // the two tabs of the Sessions / Settings card beside the deck
 const HOTKEY = 'Control+Alt+A';
 const CLAUDE_DIR = path.join(os.homedir(), '.claude');
 const SETTINGS_FILE = path.join(CLAUDE_DIR, 'settings.json');
@@ -96,8 +96,9 @@ function loadConfig() {
   c.sessionBoard = Boards.normalizeSessionBoard(c.sessionBoard, c.boards);
   if (!c.boards.some((b) => b.id === c.view && b.inside)) c.view = null; // the board shown on Main's card (null: Main)
   c.hiddenByAll = Array.isArray(c.hiddenByAll) ? c.hiddenByAll.filter((id) => c.boards.some((b) => b.id === id)) : [];
-  if (typeof c.settingsOpen !== 'boolean') c.settingsOpen = false;
-  if (!c.settingsPos || !Number.isFinite(c.settingsPos.x) || !Number.isFinite(c.settingsPos.y)) c.settingsPos = null;
+  if (!PanelSize.SIDES.includes(c.drawerSide)) c.drawerSide = null; // the Sessions / Settings card's side (null: the rail's)
+  delete c.settingsOpen; // 0.6.0 had Settings in its own window
+  delete c.settingsPos;
   if (!Grouping.MODES.includes(c.groupBy)) c.groupBy = 'folder';
   if (!Array.isArray(c.pins)) c.pins = [];
   if (!Array.isArray(c.groups)) c.groups = [];
@@ -192,11 +193,10 @@ function pushState() {
       const ui = { muted: cfg.muted, collapsed: cfg.collapsed, showIdle: cfg.showIdle, rail: cfg.rail, drawer: cfg.drawer, notify: cfg.notify, dock: cfg.dock, startup: INSTALLED ? cfg.startup : null,
         theme: cfg.theme, mode: Themes.resolveMode(cfg.theme, nativeTheme.shouldUseDarkColors) };
       if (tourWin && !tourWin.isDestroyed()) tourWin.webContents.send('state', { ui });
-      const base = { muted: cfg.muted, collapsed: cfg.collapsed, showIdle: cfg.showIdle, rail: cfg.rail, drawer: cfg.drawer, notify: cfg.notify, dock: cfg.dock, startup: INSTALLED ? cfg.startup : null,
+      const base = { muted: cfg.muted, collapsed: cfg.collapsed, showIdle: cfg.showIdle, rail: cfg.rail, drawer: cfg.drawer, drawerSide: cfg.drawerSide || cfg.rail, notify: cfg.notify, dock: cfg.dock, startup: INSTALLED ? cfg.startup : null,
         version: app.getVersion(), updates: updates.enabled, debug: cfg.debug, dev: DEV, zoom: cfg.zoom,
         glass: cfg.glass, settingsAdvanced: cfg.settingsAdvanced, railMin: cfg.railMin, dockNames: cfg.dockNames, width: cfg.width, deckHeight: cfg.collapsed ? null : cfg.maxHeight, groupBy: cfg.groupBy, groups: cfg.groups, folded: cfg.folded, folderOrder: cfg.folderOrder, ordered: cfg.order.length > 0 || cfg.folderOrder.length > 0, emotes: cfg.emotes, miniList: cfg.miniList || miniDragging, fixedHeight: cfg.dock ? false : cfg.collapsed ? miniDragging : cfg.maxHeight != null };
       win.webContents.send('state', { ...snap, ui: { ...base, ...viewUi('main') }, hooks });
-      if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('state', { ...snap, ui: { ...base, ...viewUi('settings') }, hooks });
       for (const bw of boardWins.values()) {
         const b = boardById(bw.id);
         if (!b || bw.win.isDestroyed()) continue;
@@ -208,7 +208,7 @@ function pushState() {
   }, 80);
 }
 
-// What each window shows: Main (or the board you opened on its card), Settings (styles the same board), a board.
+// What each window shows: Main (or the board open on its card; Settings then styles that board), or a board.
 // The theme follows the board you look at; a board without its own style looks like Main.
 const boardById = (id) => (id ? cfg.boards.find((b) => b.id === id) || null : null);
 const themeFor = (b) => (b && b.theme) || cfg.theme;
@@ -216,7 +216,7 @@ function viewUi(kind, id = null) {
   const viewing = kind === 'board' ? boardById(id) : boardById(cfg.view);
   const theme = themeFor(viewing);
   return {
-    view: kind, boardView: cfg.view, settingsOpen: cfg.settingsOpen, hiddenByAll: cfg.hiddenByAll.length,
+    view: kind, boardView: cfg.view, hiddenByAll: cfg.hiddenByAll.length,
     board: viewing ? { id: viewing.id, name: viewing.name, inside: viewing.inside, ownTheme: !!viewing.theme, stuck: !!viewing.stuck } : null,
     boards: cfg.boards.map((b) => ({ id: b.id, name: b.name, inside: b.inside, visible: b.inside ? cfg.view === b.id : b.visible, theme: themeFor(b) })),
     theme, mode: Themes.resolveMode(theme, nativeTheme.shouldUseDarkColors),
@@ -361,8 +361,8 @@ function createWindow() {
   win.on('move', followMain); // boards stuck to Main move with it
   win.on('close', (e) => { if (!quitting) { e.preventDefault(); win.hide(); } });
   win.on('session-end', cleanup); // Windows log off / shutdown
-  win.on('show', () => { rebuildTrayMenu(); syncBoards(); syncSettings(); }); // the tray menu says Minimise or Restore
-  win.on('hide', () => { rebuildTrayMenu(); syncBoards(); syncSettings(); }); // stuck boards and Settings hide with Main
+  win.on('show', () => { rebuildTrayMenu(); syncBoards(); }); // the tray menu says Minimise or Restore
+  win.on('hide', () => { rebuildTrayMenu(); syncBoards(); }); // stuck boards hide with Main
   win.once('ready-to-show', revealWindow);
   win.webContents.once('did-finish-load', () => setTimeout(() => { if (!win.isVisible()) revealWindow(); }, 500));
   win.webContents.on('did-finish-load', () => win.webContents.setZoomFactor(Z()));
@@ -524,6 +524,9 @@ let deck = null;
 let off = { x: 0, y: 0 };
 const railSide = () => (cfg.dock ? null : cfg.rail); // the rail stays when minimised (compact), not in the pet dock
 const drawerOpen = () => !cfg.dock && !cfg.railMin && cfg.drawer != null; // sidebar and panel minimise separately
+const drawerSide = () => cfg.drawerSide || cfg.rail; // the card docks on its own side
+// A side rail grows with its board buttons (Main's tabs, + and the toggles for board windows).
+const railMinH = () => PanelSize.RAIL_MIN_H + 34 * (cfg.boards.length + 2) + (cfg.boards.some((b) => !b.inside) ? 40 : 0);
 let dockWidth = 200; // pet dock: the overlay measures its row
 let dockAnchored = false; // the dock keeps its bottom edge still when a card pops up above it
 // Minimised list snaps between two stops: stats only, or every deck session (no scroll bar).
@@ -537,7 +540,7 @@ function deckNow() {
 // Place the window around a deck rect, kept on screen (the whole shell shifts if it would leave it).
 function applyDeck(d) {
   const wa = screen.getDisplayMatching(win.getBounds()).workArea;
-  const r = PanelSize.shellRect(d, railSide(), drawerOpen(), cfg.railMin, Z());
+  const r = PanelSize.shellRect(d, railSide(), drawerOpen(), cfg.railMin, Z(), drawerSide(), railMinH());
   const x = Math.max(wa.x, Math.min(r.x, wa.x + wa.width - r.width));
   const y = Math.max(wa.y, Math.min(r.y, wa.y + wa.height - r.height));
   off = { x: r.offX, y: r.offY };
@@ -546,10 +549,9 @@ function applyDeck(d) {
   if (b.x !== x || b.y !== y || b.width !== r.width || b.height !== r.height) win.setBounds({ x, y, width: r.width, height: r.height });
   followMain();
 }
-function extraY() {
-  const side = railSide();
-  if (side !== 'top' && side !== 'bottom') return 0;
-  return px((cfg.railMin ? PanelSize.RAIL_MIN : PanelSize.RAIL) + PanelSize.GAP + (drawerOpen() ? PanelSize.DRAWER_H + PanelSize.GAP : 0));
+function extraY() { // what the rail and the card add above and below the deck
+  const e = PanelSize.shellExtras(railSide(), drawerOpen(), cfg.railMin, Z(), drawerSide());
+  return e.top + e.bottom;
 }
 function endDrag() {
   clearTimeout(dragWatchdog);
@@ -583,7 +585,6 @@ function fitWindow() {
 ipcMain.on('ui:resize', (e, h, stops) => {
   const pane = paneOf(e);
   if (pane.kind === 'board') { if (Number(h) > 0) pane.bw.contentHeight = px(Number(h)); fitBoard(pane.bw); return; }
-  if (pane.kind === 'settings') { if (Number(h) > 0) settingsContent = px(Number(h)); fitSettings(); return; }
   if (pane.kind !== 'main') return;
   if (Number(h) > 0) contentHeight = px(Number(h));
   const bar = Number(stops && stops.bar), full = Number(stops && stops.full);
@@ -664,12 +665,11 @@ ipcMain.on('ui:fold', (_e, key, folded) => {
 
 ipcMain.on('ui:set', (e, patch) => {
   const pane = paneOf(e);
-  if (typeof patch?.settingsOpen === 'boolean') { cfg.settingsOpen = patch.settingsOpen; syncSettings(); }
   for (const k of ['muted', 'collapsed', 'showIdle', 'notify', 'dock', 'railMin', 'dockNames', 'settingsAdvanced', 'emotes']) if (typeof patch?.[k] === 'boolean') cfg[k] = patch[k];
   if ([0, 1, 2, 3].includes(patch?.glass)) cfg.glass = patch.glass;
   if (PanelSize.ZOOMS.includes(patch?.zoom) && patch.zoom !== cfg.zoom) {
     cfg.zoom = patch.zoom;
-    for (const w of [win, tourWin, settingsWin, carryWin, ...[...boardWins.values()].map((bw) => bw.win)]) {
+    for (const w of [win, tourWin, carryWin, ...[...boardWins.values()].map((bw) => bw.win)]) {
       if (w && !w.isDestroyed()) w.webContents.setZoomFactor(cfg.zoom);
     }
     for (const bw of boardWins.values()) fitBoard(bw);
@@ -678,6 +678,7 @@ ipcMain.on('ui:set', (e, patch) => {
   if (patch && ('dock' in patch || 'collapsed' in patch)) rebuildTrayMenu();
   if (patch && 'notify' in patch) rebuildTrayMenu();
   if (PanelSize.SIDES.includes(patch?.rail)) cfg.rail = patch.rail;
+  if (PanelSize.SIDES.includes(patch?.drawerSide)) cfg.drawerSide = patch.drawerSide;
   if (typeof patch?.startup === 'boolean') { Release.setStartup(app, cfg, patch.startup); rebuildTrayMenu(); }
   if (patch && 'drawer' in patch && (patch.drawer === null || DRAWERS.includes(patch.drawer))) cfg.drawer = patch.drawer;
   if (Grouping.MODES.includes(patch?.groupBy)) cfg.groupBy = patch.groupBy;
@@ -716,7 +717,6 @@ ipcMain.on('ui:undoTheme', () => {
 ipcMain.on('ui:hide', (e) => {
   const pane = paneOf(e);
   if (pane.kind === 'board') boardOp({ op: 'hide', id: pane.id });
-  else if (pane.kind === 'settings') { cfg.settingsOpen = false; saveConfig(); syncSettings(); pushState(); }
   else if (win) win.hide();
 });
 // Pins and custom groups are keyed by the desktop session id (stable across restarts).
@@ -822,7 +822,6 @@ function paneOf(e) {
   const w = BrowserWindow.fromWebContents(e.sender);
   if (!w) return { kind: 'none' };
   if (w === win) return { kind: 'main' };
-  if (w === settingsWin) return { kind: 'settings' };
   for (const bw of boardWins.values()) if (bw.win === w) return { kind: 'board', bw, id: bw.id };
   return { kind: 'none' };
 }
@@ -894,6 +893,8 @@ function boardMoved(bw) {
   const b = boardById(bw.id);
   if (!b || bw.placing || bw.win.isDestroyed()) return;
   const r = bw.win.getBounds();
+  const mid = { x: r.x + r.width / 2, y: r.y + px(20) }; // where you held it: its header
+  if (mainShown() && contains(visibleRect(win), mid)) { boardOp({ op: 'inside', id: b.id }); return; }
   b.stuck = mainShown() ? Boards.snapTo(r, win.getBounds(), px(28)) : null;
   if (b.stuck) placeBoard(bw); else b.pos = { x: r.x, y: r.y };
   saveConfig();
@@ -965,6 +966,21 @@ function boardOp(op) {
       } else b.stuck = null;
       break;
     case 'unstick': if (!b) return; b.stuck = null; break;
+    case 'new': { // a new board on Main's card (its "+"), maybe with what you dropped on the +
+      const id = `b_${crypto.randomBytes(4).toString('hex')}`;
+      const items = cleanItems(op.items);
+      const n = Boards.addBoard(cfg, { id, name: items ? items.name : `Board ${cfg.boards.length + 1}`, items });
+      if (!n) return;
+      n.inside = true;
+      cfg.view = n.id;
+      break;
+    }
+    case 'move': { // dropped on a tab or a toggle in the sidebar
+      const items = cleanItems(op.items);
+      if (!items) return;
+      Boards.moveTo(cfg, items, b ? b.id : null);
+      break;
+    }
     case 'delete': if (!b) return; Boards.removeBoard(cfg, b.id); break;
     case 'hideAll': Boards.hideAll(cfg); break;
     case 'restore': Boards.restoreHidden(cfg); break;
@@ -977,6 +993,20 @@ function boardOp(op) {
   fitWindow();
 }
 ipcMain.on('ui:board', (_e, op) => boardOp(op));
+// A tab or toggle dragged out of the window: the board gets a window of its own right there (unstuck),
+// or, dropped on Main, it lives on Main's card.
+function placeBoardAt(b, p, target) {
+  if (target.key === 'main') { b.inside = true; b.stuck = null; cfg.view = b.id; return; }
+  if (target.key !== 'new') return;
+  const size = { width: px(b.width), height: px(160) };
+  if (cfg.view === b.id) cfg.view = null;
+  b.inside = false;
+  b.visible = true;
+  b.pos = { x: p.x - px(70), y: p.y - px(22) };
+  b.stuck = mainShown() ? Boards.snapTo({ ...b.pos, ...size }, win.getBounds(), px(28)) : null;
+  const bw = boardWins.get(b.id);
+  if (bw && !bw.win.isDestroyed()) { bw.placing = true; bw.win.setPosition(b.pos.x, b.pos.y); bw.placing = false; }
+}
 // Right-click a board's sidebar button (or its ⋯): what you can do with it. No id: every board at once.
 ipcMain.on('ui:boardMenu', (e, id) => {
   const w = BrowserWindow.fromWebContents(e.sender);
@@ -996,52 +1026,6 @@ ipcMain.on('ui:boardMenu', (e, id) => {
     { label: 'Show all boards', enabled: cfg.boards.some((x) => !x.inside && !x.visible), click: go({ op: 'showAll' }) },
   ];
   Menu.buildFromTemplate(items).popup({ window: w });
-});
-
-// ---- Settings: its own window. It opens beside the sidebar and moves on its own (it does not stick). ----
-let settingsWin = null;
-let settingsLoaded = false;
-let settingsContent = 420; // screen pixels, measured by the page
-function syncSettings() {
-  if (!cfg) return;
-  const want = cfg.settingsOpen && mainShown();
-  if (want && (!settingsWin || settingsWin.isDestroyed())) openSettings();
-  if (!settingsWin || settingsWin.isDestroyed()) return;
-  if (want && settingsLoaded && !settingsWin.isVisible()) { settingsWin.showInactive(); settingsWin.setAlwaysOnTop(true, 'screen-saver'); }
-  if (!want && settingsWin.isVisible()) settingsWin.hide();
-}
-function openSettings() {
-  const W = px(316); // the 300 px pane + its margins
-  const m = win.getBounds();
-  const wa = screen.getDisplayMatching(m).workArea;
-  let pos = cfg.settingsPos && onSomeScreen(cfg.settingsPos) ? cfg.settingsPos : null;
-  if (!pos) { // beside the sidebar, past any board stuck to that side, on the side with room
-    const stuckOn = (side) => cfg.boards.filter((b) => !b.inside && b.visible && b.stuck && b.stuck.side === side && b.pos);
-    const leftEdge = Math.min(m.x, ...stuckOn('left').map((b) => b.pos.x));
-    const rightEdge = Math.max(m.x + m.width, ...stuckOn('right').map((b) => b.pos.x + px(b.width)));
-    const roomL = leftEdge - W >= wa.x;
-    const roomR = rightEdge + W <= wa.x + wa.width;
-    const left = cfg.rail === 'right' ? roomL && !roomR : roomL || !roomR;
-    pos = left ? { x: leftEdge - W, y: m.y } : { x: rightEdge, y: m.y };
-  }
-  settingsLoaded = false;
-  settingsWin = paneWindow({ x: pos.x, y: pos.y, width: W, height: px(420), title: 'Flocklet settings', query: { view: 'settings' } });
-  settingsWin.once('ready-to-show', () => { settingsLoaded = true; fitSettings(); syncSettings(); });
-  settingsWin.on('moved', () => { const [x, y] = settingsWin.getPosition(); cfg.settingsPos = { x, y }; saveConfig(); });
-  settingsWin.on('close', (ev) => { if (quitting) return; ev.preventDefault(); cfg.settingsOpen = false; saveConfig(); syncSettings(); pushState(); });
-}
-function fitSettings() {
-  if (!settingsWin || settingsWin.isDestroyed()) return;
-  const cur = settingsWin.getBounds();
-  const wa = screen.getDisplayMatching(cur).workArea;
-  const height = Math.max(px(160), Math.min(settingsContent, Math.round(wa.height * 0.85)));
-  const r = onScreen({ x: cur.x, y: cur.y, width: px(316), height });
-  if (r.x !== cur.x || r.y !== cur.y || r.width !== cur.width || r.height !== cur.height) settingsWin.setBounds(r);
-}
-// Hovering a style in Settings previews it on the panel it styles.
-ipcMain.on('ui:preview', (e, t) => {
-  if (paneOf(e).kind !== 'settings' || !mainShown()) return;
-  win.webContents.send('preview', t && typeof t === 'object' ? Themes.normalizeTheme(t) : null);
 });
 
 // ---- the carried pet: drag something out of a window and its pet follows the pointer across the screen ----
@@ -1069,7 +1053,6 @@ function dropTarget(p) {
   const over = (w) => w && !w.isDestroyed() && w.isVisible() && contains(visibleRect(w), p);
   for (const bw of boardWins.values()) if (over(bw.win)) return { key: bw.id, win: bw.win, board: bw.id };
   if (over(win)) return { key: 'main', win, board: cfg.view };
-  if (over(settingsWin)) return { key: 'none' }; // boards first: Settings may float over one
   return { key: 'new' };
 }
 function setHover(t) {
@@ -1096,6 +1079,11 @@ const cleanCarryInfo = (i) => ({
   label: typeof i?.label === 'string' ? i.label.slice(0, 40) : '',
   theme: Themes.normalizeTheme(i?.theme || cfg.theme),
   mode: i?.mode === 'light' ? 'light' : 'dark',
+  square: i?.square && typeof i.square === 'object' ? { // a whole board being carried: its square
+    letter: String(i.square.letter || 'B').slice(0, 1),
+    bg: /^#[0-9a-f]{3,8}$/i.test(i.square.bg) ? i.square.bg : '#333333',
+    acc: /^#[0-9a-f]{3,8}$/i.test(i.square.acc) ? i.square.acc : '#888888',
+  } : null,
 });
 function cleanItems(it) {
   if (!it || typeof it !== 'object') return null;
@@ -1147,6 +1135,19 @@ ipcMain.on('ui:carry', (e, op) => {
     const p = pointOf(op);
     carryTick(p);
     stopFollow();
+    const moving = typeof op.board === 'string' ? boardById(op.board) : null;
+    if (moving) { // a whole board
+      carryWin.webContents.send('carry', { op: 'land' });
+      const w0 = carryWin;
+      setTimeout(() => { if (!w0.isDestroyed() && !carry) w0.hide(); }, 320);
+      carry = null;
+      placeBoardAt(moving, p, dropTarget(p));
+      saveConfig();
+      syncBoards();
+      pushState();
+      fitWindow();
+      return;
+    }
     const items = cleanItems(op.items);
     carryWin.webContents.send('carry', { op: 'land' });
     const w = carryWin;
@@ -1161,8 +1162,8 @@ ipcMain.on('ui:carry', (e, op) => {
 });
 
 // ---------- lifecycle ----------
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
+if (!app.requestSingleInstanceLock() || process.argv.includes('--quit')) {
+  app.quit(); // --quit only closes a running copy; with none running it must not start one
 } else {
   app.setAppUserModelId(AUMID);
   // Launching again shows the panel; launching with --quit closes the running copy cleanly.
@@ -1205,7 +1206,7 @@ if (!app.requestSingleInstanceLock()) {
 
     log('start', { version: app.getVersion(), server: !!server, display: screen.getPrimaryDisplay().workArea });
     createWindow();
-    win.once('ready-to-show', () => { syncBoards(); syncSettings(); }); // boards and Settings as you left them
+    win.once('ready-to-show', () => syncBoards()); // boards as you left them
     createTray();
     ensureHooks();
     log('hooks', hooks);

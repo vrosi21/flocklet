@@ -62,20 +62,34 @@ const SIDES = ['left', 'right', 'top', 'bottom'];
 const ZOOMS = [0.9, 1, 1.25, 1.5];
 const clampZoom = (z) => (ZOOMS.includes(z) ? z : 1);
 
-// deck = {x, y, width, height} on screen. side = rail side, or null (minimised: no rail).
-// Returns the window rect and where the deck sits inside it (offX, offY).
-// zoom: the page's zoom (Settings → Size); rail and drawer sizes are page pixels, the deck rect is screen pixels.
-function shellRect(deck, side, drawerOpen, railMin = false, zoom = 1) {
-  if (!SIDES.includes(side)) return { ...deck, offX: 0, offY: 0 };
-  const across = side === 'left' || side === 'right';
-  const open = drawerOpen && !railMin; // a minimised sidebar has no drawer
-  const extra = Math.round(zoom * ((railMin ? RAIL_MIN : RAIL) + GAP + (open ? (across ? DRAWER_W : DRAWER_H) + GAP : 0)));
-  const width = across ? deck.width + extra : deck.width;
-  const minH = Math.round(zoom * (open ? DRAWER_MIN_H : railMin ? 0 : RAIL_MIN_H));
-  const height = across ? Math.max(deck.height, minH) : deck.height + extra;
-  const offX = side === 'left' ? extra : 0;
-  const offY = side === 'top' ? extra : 0;
-  return { x: deck.x - offX, y: deck.y - offY, width, height, offX, offY };
+// The space the rail and the drawer card add on each side of the deck (screen pixels). The card (Sessions +
+// Settings) docks on its own side (drawerSide, default: the rail's); on the rail's side it sits beyond the rail.
+function shellExtras(side, drawerOpen, railMin = false, zoom = 1, drawerSide = side) {
+  const ext = { left: 0, right: 0, top: 0, bottom: 0 };
+  if (!SIDES.includes(side)) return ext;
+  ext[side] += (railMin ? RAIL_MIN : RAIL) + GAP;
+  const dside = SIDES.includes(drawerSide) ? drawerSide : side;
+  if (drawerOpen && !railMin) ext[dside] += (dside === 'left' || dside === 'right' ? DRAWER_W : DRAWER_H) + GAP; // a minimised sidebar has no card
+  for (const k of SIDES) ext[k] = Math.round(zoom * ext[k]);
+  return ext;
 }
 
-module.exports = { MINI_MIN, MINI_MAX, clampMini, snapMini, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_CAP, EDGES, clampWidth, clampCap, dragTo, fitHeight, windowHeight, RAIL, RAIL_MIN, RAIL_MIN_H, GAP, DRAWER_W, DRAWER_H, DRAWER_MIN_H, SIDES, shellRect, ZOOMS, clampZoom };
+// deck = {x, y, width, height} on screen. side = rail side, or null (pet dock: no rail).
+// Returns the window rect and where the deck sits inside it (offX, offY); the deck never moves on screen.
+// zoom: the page's zoom (Settings → Size); rail and card sizes are page pixels, the deck rect is screen pixels.
+// railMinH: how tall a side rail needs to be (it grows with the board buttons on it).
+function shellRect(deck, side, drawerOpen, railMin = false, zoom = 1, drawerSide = side, railMinH = RAIL_MIN_H) {
+  if (!SIDES.includes(side)) return { ...deck, offX: 0, offY: 0 };
+  const across = (s) => s === 'left' || s === 'right';
+  const dside = SIDES.includes(drawerSide) ? drawerSide : side;
+  const open = drawerOpen && !railMin;
+  const ext = shellExtras(side, drawerOpen, railMin, zoom, dside);
+  const minMid = Math.round(zoom * Math.max(open && across(dside) ? DRAWER_MIN_H : 0, !railMin && across(side) ? railMinH : 0));
+  return {
+    x: deck.x - ext.left, y: deck.y - ext.top,
+    width: deck.width + ext.left + ext.right, height: Math.max(deck.height, minMid) + ext.top + ext.bottom,
+    offX: ext.left, offY: ext.top,
+  };
+}
+
+module.exports = { MINI_MIN, MINI_MAX, clampMini, snapMini, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_CAP, EDGES, clampWidth, clampCap, dragTo, fitHeight, windowHeight, RAIL, RAIL_MIN, RAIL_MIN_H, GAP, DRAWER_W, DRAWER_H, DRAWER_MIN_H, SIDES, shellRect, shellExtras, ZOOMS, clampZoom };

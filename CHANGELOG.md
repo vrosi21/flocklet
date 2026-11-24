@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.1
+
+- Sessions + Settings are one card beside the deck (tabs), docked on its own side by its dots (`cfg.drawerSide`;
+  `shellExtras` / `shellRect` take the card's side; the shell is a 5 x 5 CSS grid with the deck in the middle).
+  The separate Settings window from 0.6.0 is removed (`settingsOpen` / `settingsPos` dropped from the config).
+- Sidebar in parts: the main card's tabs (Main, boards that live on it, + new board), toggles for boards in their
+  own windows (with the all-boards menu), Settings. Tabs and toggles are drop targets (`[data-drop]`): drop a
+  session to move it, on + for a new board. Drag a tab out of the window = its own window at that point; a toggle
+  onto the tabs = on the main card; a board window let go over Main = on the main card; "Move into Main" button.
+- Scroll bars always visible (rounded thumb on a faint track, accent while dragged).
+- Fix: `--quit` with no running copy started one; now it only closes a running copy.
+
 ## 0.6.0
 
 - Boards (`src/boards.js`): workspaces made by dragging a project, group or session out of a window. Projects and

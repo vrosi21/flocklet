@@ -16,7 +16,8 @@ that shows what its agent is doing, so you can keep working elsewhere and still 
   its pet while you carry it, and a parent takes its children along. Busy pets do a little emote now and then.
 - **Boards**: drag a group or a session out of the panel and it becomes a board of its own, with its own name and
   style. Drop it near the panel and it sticks there and moves with it; drop it anywhere else and it floats free.
-  Each board gets a button in the sidebar to show or hide it, or it can live inside the main panel.
+  In the sidebar, tabs switch the main card between Main and its boards (+ makes a new one), and toggles show or
+  hide boards in their own windows. Drop a session on a tab or toggle to move it there.
 - **A one-minute tour** on first start (reopen it from the tray or Settings).
 
 ## Install

@@ -3,11 +3,13 @@
 // the card folds into its pet, which dangles under the pointer; the others make room. The new order goes to
 // main (G.placeBlock) and shows at once (G.reorderBlock). Drag it out of the window and its pet follows the
 // pointer across the screen (a small window main moves): drop it on a board or Main to move it there, or on the
-// empty desktop to make a new board (src/boards.js). Loaded after app.js and uses its globals
-// (state, api, VIEW, onDeck, G, P, h, pet, render, emote, carryHold, afterRender, renderMissed, petFor, menuFor).
+// empty desktop to make a new board (src/boards.js). Drop it on a tab or toggle in the sidebar to move it to that
+// board, or on + for a new one. A board's own tab or toggle can be dragged too: to the other part of the sidebar
+// (on the main card / its own window) or out of Flocklet (its own window, right there).
+// Loaded after app.js and uses its globals (state, api, VIEW, onDeck, myBoard, boardSquare, G, P, h, pet, render,
+// emote, carryHold, afterRender, renderMissed, petFor, menuFor).
 (function () {
   if (VIEW === 'carry') { carryPage(); return; }
-  if (VIEW === 'settings') return;
   const START_PX = 6; // a press that moves less than this is a click
   const NEST_H = 46; // the landing spot in the panel, while you carry
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -184,15 +186,42 @@
       d.out = out;
       api.carry({ op: out ? 'out' : 'in', x: d.sx, y: d.sy });
       d.carrier.classList.toggle('gone', out);
-      d.nest.classList.toggle('away', out);
-      if (out) moveNest(d, d.orig);
+      if (out) setDrop(d, null);
+      if (d.nest) { d.nest.classList.toggle('away', out); if (out) moveNest(d, d.orig); }
     } else if (out && (d.sx !== d.sentX || d.sy !== d.sentY)) {
       api.carry({ op: 'move', x: d.sx, y: d.sy });
     }
     d.sentX = d.sx;
     d.sentY = d.sy;
-    if (d.ready && !d.out) { autoScroll(d); if (!d.fixed) moveNest(d, slotAt(d)); }
+    if (d.ready && !d.out) {
+      if (d.kind === 'board') setDrop(d, zoneAt(d));
+      else {
+        const t = dropAt(d); // a tab or toggle in the sidebar: move it to that board
+        setDrop(d, t);
+        d.nest.classList.toggle('away', !!t);
+        if (t) moveNest(d, d.orig);
+        else { autoScroll(d); if (!d.fixed) moveNest(d, slotAt(d)); }
+      }
+    }
     d.raf = requestAnimationFrame(frame);
+  }
+
+  // ---- drop targets in the sidebar ----
+  const homeDrop = () => (myBoard() ? `board:${myBoard()}` : 'main'); // dropping on its own tab does nothing
+  function dropAt(d) {
+    const el = document.elementFromPoint(d.px, d.py);
+    const t = el && el.closest('[data-drop]');
+    return t && t.dataset.drop !== homeDrop() ? t : null;
+  }
+  function zoneAt(d) { // a board's tab goes to the windows part, a window's toggle to the tabs
+    const el = document.elementFromPoint(d.px, d.py);
+    return el && el.closest(d.board.inside ? '.rwins' : '.rtabs');
+  }
+  function setDrop(d, el) {
+    if (d.dropEl === el) return;
+    if (d.dropEl) d.dropEl.classList.remove('droptarget');
+    if (el) el.classList.add('droptarget');
+    d.dropEl = el || null;
   }
 
   function span(els) {
@@ -256,7 +285,10 @@
     const d = drag;
     if (!d || d.landing) return;
     cancelAnimationFrame(d.raf);
+    if (d.kind === 'board') { finishBoard(d, commit); return; }
     if (d.out && commit) { leave(d); return; }
+    if (commit && d.dropEl) { dropOn(d); return; }
+    setDrop(d, null);
     if (d.out) { // Escape outside: it comes back home
       d.out = false;
       api.carry({ op: 'in' });
@@ -348,14 +380,80 @@
   }
   // Dropped outside this window: main moves it (or makes a board); here it is gone at once.
   function leave(d) {
-    d.landing = true;
     const items = itemsOf(d);
     api.carry({ op: 'drop', x: d.sx, y: d.sy, items });
+    d.carrier.remove();
+    goneHere(d, items);
+  }
+  // Dropped on a tab or toggle in the sidebar (or on +): the pet hops into it, which gives a little bounce.
+  function dropOn(d) {
+    const el = d.dropEl;
+    const t = el.dataset.drop;
+    const items = itemsOf(d);
+    if (t === 'new') api.board({ op: 'new', items });
+    else api.board({ op: 'move', id: t === 'main' ? null : t.slice(6), items });
+    api.carry({ op: 'end' });
+    el.classList.remove('droptarget');
+    const r = el.getBoundingClientRect();
+    const c = d.carrier;
+    anim(c, [{ transform: c.style.transform, opacity: 1 }, { transform: `translate(${r.left + r.width / 2 - d.cw / 2}px, ${r.top - 4}px) scale(0.3)`, opacity: 0 }],
+      { duration: 220, easing: 'ease-in', fill: 'forwards' }).finished.then(() => c.remove());
+    if (still()) c.remove();
+    goneHere(d, items);
+    const again = document.querySelector(`.rail [data-drop="${esc(t)}"]`);
+    if (again) anim(again, [{ transform: 'none' }, { transform: 'scale(1.3)', offset: 0.45 }, { transform: 'none' }], { duration: 340, delay: 150, easing: 'ease-out' });
+  }
+  function goneHere(d, items) {
+    d.landing = true;
     const gone = new Set(items.keys);
     state.cards = state.cards.map((c) => (gone.has(c.key) ? { ...c, board: '(moving)' } : c));
-    d.carrier.remove();
-    d.nest.remove();
+    if (d.nest) d.nest.remove();
     document.documentElement.classList.remove('carrying');
+    drag = null;
+    carryHold = false;
+    renderMissed = false;
+    render();
+  }
+
+  // ---- a whole board, by its tab or toggle in the sidebar ----
+  function beginBoard(p) {
+    const b = (state.ui.boards || []).find((x) => x.id === p.key);
+    const el = document.querySelector(`.rail [data-board="${esc(p.key)}"]`);
+    if (!b || !el) return null;
+    return { kind: 'board', where: 'rail', key: b.id, board: b, el, ready: true, x: 0, y: 0, vx: 0, vy: 0, ang: 0, av: 0, px: p.x, py: p.y };
+  }
+  function liftBoard(d) {
+    carryHold = true;
+    document.documentElement.classList.add('carrying', 'carrying-board', d.board.inside ? 'from-tabs' : 'from-wins');
+    d.el.classList.add('lifted');
+    const sq = boardSquare(d.board);
+    d.body = h('div', { class: 'cbody' }, sq, h('span', { class: 'ctag' }, d.board.name));
+    d.carrier = h('div', { class: 'carrier in-deck bigsq' }, d.body);
+    document.body.append(d.carrier);
+    const r = d.el.getBoundingClientRect();
+    const cr = d.carrier.getBoundingClientRect();
+    d.cw = cr.width;
+    d.ch = cr.height;
+    d.x = r.left + r.width / 2 - d.cw / 2;
+    d.y = r.top;
+    d.carrier.style.transform = `translate(${d.x}px, ${d.y}px)`;
+    const pal = T.PALETTES.find((x) => x.id === (d.board.theme || {}).palette) || T.PALETTES[0];
+    api.carry({ op: 'start', info: { pets: [], square: { letter: sq.textContent, bg: pal.swatch.bg, acc: pal.swatch.accent }, label: d.board.name,
+      theme: state.ui.theme, mode: document.documentElement.dataset.mode } });
+    anim(sq, [{ transform: 'scale(0.8)' }, { transform: 'scale(1.2)', offset: 0.5 }, { transform: 'none' }], { duration: 260, easing: 'ease-out' });
+  }
+  function finishBoard(d, commit) {
+    d.landing = true;
+    const id = d.board.id;
+    if (d.out && commit) api.carry({ op: 'drop', x: d.sx, y: d.sy, board: id }); // its own window there (or onto Main)
+    else {
+      if (commit && d.dropEl) api.board({ op: d.board.inside ? 'popout' : 'inside', id });
+      api.carry({ op: d.out ? 'cancel' : 'end' });
+    }
+    setDrop(d, null);
+    d.el.classList.remove('lifted');
+    d.carrier.remove();
+    document.documentElement.classList.remove('carrying', 'carrying-board', 'from-tabs', 'from-wins');
     drag = null;
     carryHold = false;
     renderMissed = false;
@@ -434,7 +532,9 @@
     const t = e.target;
     if (!(t instanceof Element) || t.closest('input, textarea, select, .waitbox, .petpop, .actions, .dend, .dmore, .newgroup')) return;
     let p = null;
-    if (t.closest('.list[data-scroll="deck"]')) {
+    const rb = t.closest('.rail [data-board]');
+    if (rb) p = { where: 'rail', kind: 'board', key: rb.dataset.board };
+    else if (t.closest('.list[data-scroll="deck"]')) {
       if (t.closest('button')) return;
       const row = t.closest('.card[data-k], .ghost[data-k]');
       const hd = t.closest('.ghdr[data-h]');
@@ -460,7 +560,7 @@
     if (!press || e.pointerId !== press.id) return;
     if (e.buttons === 0) { press = null; return; }
     if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < START_PX) return;
-    const d = begin(press);
+    const d = press.kind === 'board' ? beginBoard(press) : begin(press);
     press = null;
     if (!d) return;
     drag = d;
@@ -470,7 +570,7 @@
     d.sx = e.screenX;
     d.sy = e.screenY;
     try { document.body.setPointerCapture(e.pointerId); } catch { /* the pointer is already gone */ }
-    lift(d);
+    if (d.kind === 'board') liftBoard(d); else lift(d);
     d.raf = requestAnimationFrame(frame);
   });
   window.addEventListener('pointerup', () => { press = null; if (drag) finish(true); });
@@ -502,9 +602,15 @@
         ds.look = info.theme.look;
         ds.mode = info.mode;
         const pets = info.pets.map((x) => { const el = pet(x.kind, 'carry'); el.style.setProperty('--pc', `var(--g${x.slot})`); return el; });
-        body = h('div', { class: 'cbody' }, pets.length > 1 ? h('div', { class: 'huddle' }, pets) : pets[0],
+        let face = pets.length > 1 ? h('div', { class: 'huddle' }, pets) : pets[0];
+        if (info.square) { // a whole board: its square
+          face = h('span', { class: 'bsq' }, info.square.letter);
+          face.style.setProperty('--s-bg', info.square.bg);
+          face.style.setProperty('--s-acc', info.square.acc);
+        }
+        body = h('div', { class: 'cbody' }, face,
           info.badge && h('span', { class: 'cbadge' }, info.badge), info.label && h('span', { class: 'ctag' }, info.label));
-        document.body.replaceChildren(h('div', { class: `carrier${pets.length > 1 ? ' flock' : ''}` }, body));
+        document.body.replaceChildren(h('div', { class: `carrier${pets.length > 1 ? ' flock' : ''}${info.square ? ' bigsq' : ''}` }, body));
         lastX = window.screenX;
         ang = 0;
         av = 0;

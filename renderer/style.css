@@ -131,16 +131,17 @@ button:disabled { opacity: 0.3; cursor: default; }
   flex-direction: column;
   gap: 6px;
 }
-/* scroll bars: a slim rounded thumb with no track; faint until you point at the list, the accent while you drag it */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+/* scroll bars: always there; a rounded pill riding on a faint groove; wider and brighter under the pointer,
+   the accent while you drag it */
+::-webkit-scrollbar { width: 12px; height: 12px; }
 ::-webkit-scrollbar-button { display: none; }
+::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-track { border: 4.5px solid transparent; border-radius: 12px; background: color-mix(in srgb, var(--text) 7%, transparent) padding-box; }
 ::-webkit-scrollbar-thumb {
-  min-height: 36px; border: 3px solid transparent; border-radius: 10px; background-clip: padding-box;
-  background-color: color-mix(in srgb, var(--text) 10%, transparent);
+  min-height: 40px; border: 3px solid transparent; border-radius: 12px;
+  background: color-mix(in srgb, var(--text) 32%, transparent) padding-box;
 }
-:hover::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--text) 28%, transparent); }
-::-webkit-scrollbar-thumb:hover { border-width: 2px; background-color: color-mix(in srgb, var(--text) 45%, transparent); }
+::-webkit-scrollbar-thumb:hover { border-width: 2px; background-color: color-mix(in srgb, var(--text) 50%, transparent); }
 ::-webkit-scrollbar-thumb:active { border-width: 2px; background-color: var(--accent); }
 
 .empty { padding: 14px 8px 10px; color: var(--muted); text-align: center; font-size: 12px; }
@@ -553,23 +554,24 @@ button.mini.pickable:hover { outline: 2px solid color-mix(in srgb, var(--pc) 55%
 .sw:hover { transform: scale(1.1); }
 .petpop .btnrow { margin-top: 0; }
 
-/* ---------- shell: deck + sidebar rail + drawer ---------- */
-/* The window is sized by main (src/panelSize.js shellRect): RAIL 40, GAP 6, drawer 300 wide / 320 tall. */
-.shell { position: fixed; inset: 0; padding: 8px 8px 16px; box-sizing: border-box; display: flex; gap: 6px; align-items: flex-start; }
-.shell > .panel { flex: 0 0 auto; min-width: 0; }
-.shell.side-left, .shell.side-right { flex-direction: row; }
-.shell.side-left > .panel, .shell.side-right > .panel { width: calc(var(--deckw) - 16px); }
-.shell.side-top, .shell.side-bottom { flex-direction: column; align-items: stretch; }
-.shell.side-top > .panel, .shell.side-bottom > .panel { flex: 1 1 auto; min-height: 0; max-height: none; }
-.shell.side-top > .panel.fixed, .shell.side-bottom > .panel.fixed { height: auto; }
-/* order: drawer always outermost, rail between it and the deck */
-.shell.side-left > .drawer, .shell.side-top > .drawer { order: 0; }
-.shell.side-left > .rail, .shell.side-top > .rail { order: 1; }
-.shell.side-left > .panel, .shell.side-top > .panel { order: 2; }
-.shell.side-right > .panel, .shell.side-bottom > .panel { order: 0; }
-.shell.side-right > .rail, .shell.side-bottom > .rail { order: 1; }
-.shell.side-right > .drawer, .shell.side-bottom > .drawer { order: 2; }
-.shell.minimised > .panel { width: auto; flex: 1 1 auto; }
+/* ---------- shell: deck + sidebar rail + the Sessions / Settings card ---------- */
+/* The window is sized by main (src/panelSize.js shellRect): RAIL 40, GAP 6, card 300 wide / 320 tall.
+   A 5 x 5 grid with the deck in the middle: the rail sits next to it on its side (side-*), the card on its own
+   side (dside-*), beyond the rail when they share a side. */
+.shell {
+  position: fixed; inset: 0; padding: 8px 8px 16px; box-sizing: border-box;
+  display: grid; grid-template-columns: repeat(5, auto); grid-template-rows: auto auto minmax(0, 1fr) auto auto; justify-content: start;
+}
+.shell > .panel { grid-area: 3 / 3; align-self: start; min-width: 0; width: calc(var(--deckw) - 16px); max-height: 100%; }
+.shell > .panel.fixed { height: min(var(--deckh, 100%), 100%); }
+.shell.side-left > .rail { grid-area: 3 / 2; margin-right: 6px; }
+.shell.side-right > .rail { grid-area: 3 / 4; margin-left: 6px; }
+.shell.side-top > .rail { grid-area: 2 / 3; margin-bottom: 6px; }
+.shell.side-bottom > .rail { grid-area: 4 / 3; margin-top: 6px; }
+.shell.dside-left > .drawer { grid-area: 3 / 1; margin-right: 6px; }
+.shell.dside-right > .drawer { grid-area: 3 / 5; margin-left: 6px; }
+.shell.dside-top > .drawer { grid-area: 1 / 3; margin-bottom: 6px; }
+.shell.dside-bottom > .drawer { grid-area: 5 / 3; margin-top: 6px; }
 
 .pane {
   background: var(--bg); border: 0; border-radius: calc(var(--radius-panel) + 4px);
@@ -636,8 +638,16 @@ button.mini.pickable:hover { outline: 2px solid color-mix(in srgb, var(--pc) 55%
 
 .drawer { flex: none; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
 .drawer[hidden] { display: none; }
-.side-left > .drawer, .side-right > .drawer { width: 300px; align-self: stretch; }
-.side-top > .drawer, .side-bottom > .drawer { height: 320px; }
+.dside-left > .drawer, .dside-right > .drawer { width: 300px; align-self: stretch; }
+.dside-top > .drawer, .dside-bottom > .drawer { height: 320px; }
+/* the card's top: its two tabs, its dots (drag them to another side of the panel), close */
+.dtop { display: flex; align-items: center; gap: 6px; padding: 8px 8px 2px 10px; flex: none; }
+.dgrip { width: 22px; height: 26px; display: grid; place-items: center; color: var(--muted); cursor: grab; opacity: 0.75; border-radius: var(--radius); }
+.dgrip:hover { opacity: 1; color: var(--text); background: var(--hover); }
+.dgrip .ic, .dgrip .ic svg { width: 14px; height: 14px; }
+.drawer > .settings { flex: 1 1 auto; min-height: 0; }
+.drawer .dhead { display: none; } /* the tab already says it */
+.drawer .dheadrow:not(:has(button)) { display: none; }
 .drawer > .browser { border-top: 0; flex: 1 1 auto; min-height: 0; }
 .drawer .blist { max-height: none; flex: 1 1 auto; min-height: 0; }
 .settings { overflow-y: auto; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 12px; }
@@ -865,20 +875,14 @@ html.carrying .card:hover { background: var(--card); }
   background: color-mix(in srgb, var(--text) 30%, transparent); }
 
 /* ---------- windows: Main, a board, Settings, the carried pet (renderer/app.js VIEW) ---------- */
-.shell.solo { flex-direction: row; }
+.shell.solo { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
 .shell.solo > .rail, .shell.solo > .drawer { display: none; }
-.shell.solo > .panel { width: 100%; flex: 1 1 auto; }
-.v-carry #shell, .v-carry .rz, .v-settings .rz { display: none; }
+.shell.solo > .panel { grid-area: 1 / 1; width: auto; }
+.v-carry #shell, .v-carry .rz { display: none; }
 .v-carry .carrier { position: fixed; left: 50%; top: 6px; transform: translateX(-50%); }
-/* Settings in its own window: drag its header to move it */
-.panel.settingswin > .settings { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.v-settings .dheadrow .dhead { display: none; }
-.v-settings .dheadrow:not(:has(button)) { display: none; }
-.sgear { display: grid; place-items: center; color: var(--accent); }
-.stylefor { color: var(--muted); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* the sidebar moves Main too (its buttons stay buttons) */
 .rail { -webkit-app-region: drag; }
-.rail button, .rail .rgrip, .rail .rboards { -webkit-app-region: no-drag; }
+.rail button, .rail .rgrip, .rail .rsec { -webkit-app-region: no-drag; }
 
 /* ---------- boards (src/boards.js) ---------- */
 /* a board's name: click to rename */
@@ -893,15 +897,35 @@ input.bname { height: 26px; width: 62%; margin-left: -5px; padding: 0 6px; font-
 .bstyle { flex: none; margin: 0 8px 8px; padding: 8px; border-radius: var(--radius-card); background: var(--card); display: flex; flex-direction: column; gap: 8px; }
 .bstyle .ptiles { margin: 0; }
 .bstyle .seg { flex-wrap: wrap; }
-/* Main showing a board on its card: the way back */
-.vback { display: inline-flex; align-items: center; gap: 1px; height: 24px; padding: 0 8px 0 3px; border-radius: 12px; flex: none;
-  background: var(--hover); color: var(--text-2); font-size: 11px; font-weight: 700; }
-.vback:hover { background: var(--hover-2); color: var(--text); }
-.vback .ic, .vback .ic svg { width: 14px; height: 14px; }
-/* sidebar: a button per board (its colours and first letter), and one for all of them */
-.rboards { display: flex; align-items: center; gap: 4px; }
-.side-left > .rail .rboards, .side-right > .rail .rboards { flex-direction: column; margin-top: 2px; padding-top: 6px; border-top: 1px solid var(--line); }
-.side-top > .rail .rboards, .side-bottom > .rail .rboards { flex-direction: row; margin-left: 2px; padding-left: 6px; border-left: 1px solid var(--line); }
+/* sidebar, in parts: Sessions | the main card's tabs (Main, its boards, +) | board windows (toggles) | Settings */
+.rsec { display: flex; align-items: center; gap: 4px; border-radius: 10px; transition: background 0.15s, box-shadow 0.15s; }
+.side-left > .rail .rsec, .side-right > .rail .rsec { flex-direction: column; margin-top: 2px; padding-top: 6px; border-top: 1px solid var(--line); }
+.side-top > .rail .rsec, .side-bottom > .rail .rsec { flex-direction: row; margin-left: 2px; padding-left: 6px; border-left: 1px solid var(--line); }
+.rsec.rwins.empty { display: none; } /* shows while you drag a tab, so it can get a window of its own */
+html.from-tabs .rsec.rwins.empty { display: flex; }
+.rslot { display: none; width: 26px; height: 26px; border-radius: 7px; border: 1.5px dashed color-mix(in srgb, var(--text) 35%, transparent); }
+html.from-tabs .rwins .rslot { display: block; }
+.rsec.droptarget { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 0 0 0 2px var(--accent); }
+/* a tab: what the main card shows; the open one gets a bar on the panel's side */
+.rtab.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.rtab.on::before { content: ""; position: absolute; border-radius: 2px; background: var(--accent); }
+.side-left > .rail .rtab.on::before { right: -5px; top: 7px; bottom: 7px; width: 3px; }
+.side-right > .rail .rtab.on::before { left: -5px; top: 7px; bottom: 7px; width: 3px; }
+.side-top > .rail .rtab.on::before { bottom: -5px; left: 7px; right: 7px; height: 3px; }
+.side-bottom > .rail .rtab.on::before { top: -5px; left: 7px; right: 7px; height: 3px; }
+.rtab.add { color: var(--muted); outline: 1.5px dashed color-mix(in srgb, var(--text) 28%, transparent); outline-offset: -4px; }
+.rtab.add:hover { color: var(--accent); outline-color: var(--accent); }
+/* a toggle: a board in its own window; a small window mark, dim while hidden */
+.rwin { position: absolute; right: 1px; bottom: 1px; width: 10px; height: 8px; border-radius: 2px; box-sizing: border-box;
+  border: 1.5px solid var(--text-2); border-top-width: 3px; background: var(--bg); }
+.rtoggle:not(.on) .bsq { opacity: 0.4; filter: saturate(0.4); }
+.rtoggle:not(.on) .rwin { opacity: 0.5; }
+.rtoggle.on { background: var(--hover); }
+/* drop a session (or a board) here */
+.rbtn.droptarget { background: color-mix(in srgb, var(--accent) 28%, transparent); box-shadow: 0 0 0 2px var(--accent); transform: scale(1.12); color: var(--accent); }
+.rbtn { transition: transform 0.12s, background 0.12s; }
+.rbtn.lifted { opacity: 0.25; }
+.carrier.bigsq .bsq { width: 34px; height: 34px; border-radius: 10px; font-size: 16px; box-shadow: 0 6px 10px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
 .bsq {
   width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center;
   font-size: 10.5px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
@@ -909,8 +933,6 @@ input.bname { height: 26px; width: 62%; margin-left: -5px; padding: 0 6px; font-
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
   transition: opacity 0.15s, filter 0.15s;
 }
-.rboard:not(.on) .bsq { opacity: 0.45; filter: saturate(0.5); }
-.rbtn.rboard.on { background: var(--hover); }
 .rdot { position: absolute; right: 2px; top: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px var(--bg); }
 .rall { opacity: 0.7; }
 .rall:hover { opacity: 1; }

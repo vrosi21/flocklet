@@ -81,3 +81,14 @@ test('zoom scales the rail and drawer around the deck; unknown zooms fall back t
   assert.equal(S.clampZoom(1.25), 1.25);
   assert.equal(S.clampZoom(3), 1);
 });
+
+test('shellRect: the Sessions/Settings card docks on its own side, the deck stays put', () => {
+  const deck = { x: 1000, y: 200, width: 368, height: 300 };
+  const r = S.shellRect(deck, 'left', true, false, 1, 'right');
+  assert.deepEqual(r, { x: 954, y: 200, width: 720, height: 400, offX: 46, offY: 0 }, 'rail left, card right');
+  const t = S.shellRect(deck, 'left', true, false, 1, 'bottom');
+  assert.deepEqual(t, { x: 954, y: 200, width: 414, height: 626, offX: 46, offY: 0 }, 'card below: the window grows down only');
+  assert.deepEqual(S.shellRect(deck, 'left', true, true, 1, 'right'), S.shellRect(deck, 'left', false, true), 'minimised sidebar: no card');
+  assert.equal(S.shellRect({ ...deck, height: 90 }, 'left', false, false, 1, 'left', 200).height, 200, 'a rail with board buttons needs more height');
+  assert.deepEqual(S.shellExtras('top', true, false, 1, 'left'), { left: 306, right: 0, top: 46, bottom: 0 });
+});

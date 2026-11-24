@@ -1,10 +1,10 @@
 // Flocklet overlay. Untrusted strings (titles, commands, messages) only ever go
 // through text nodes; innerHTML is used solely for constant SVGs (icons below, pets.js).
 const api = window.agentdeck;
-// Which window this page is: Main, a board (?board=<id>), Settings (?view=settings) or the carried pet (?view=carry).
+// Which window this page is: Main, a board (?board=<id>) or the carried pet (?view=carry).
 const PARAMS = new URLSearchParams(location.search);
 const BOARD_ID = PARAMS.get('board');
-const VIEW = BOARD_ID ? 'board' : ['settings', 'carry'].includes(PARAMS.get('view')) ? PARAMS.get('view') : 'main';
+const VIEW = BOARD_ID ? 'board' : PARAMS.get('view') === 'carry' ? 'carry' : 'main';
 document.documentElement.classList.add(`v-${VIEW}`);
 // The cards this page shows: its board's (a board window), or the board opened on Main's card, or Main's own.
 const myBoard = () => (VIEW === 'board' ? BOARD_ID : (state && state.ui.boardView) || null);
@@ -107,11 +107,11 @@ function header({ ui }, deck) {
   logo.innerHTML = P.petSvg('chick'); // constant markup only
   logo.append(h('span', { class: `dot ${status}` }));
   return h('header', { class: 'header' },
-    ui.board ? h('button', { class: 'vback', title: 'Back to Main', onclick: () => api.board({ op: 'view', id: null }) }, icon('back'), 'Main') : logo,
+    ui.board ? h('span', { class: `bdot ${status}` }) : logo,
     ui.board ? boardName(ui.board) : h('span', { class: 'title' }, 'Flocklet'),
     !ui.collapsed && h('span', { class: 'count' }, String(counts.working + counts.waiting + counts.done)),
     h('span', { class: 'spacer' }),
-    ui.board && btn('popout', 'Pop out into its own window', () => api.board({ op: 'popout', id: ui.board.id })),
+    ui.board && btn('popout', 'Give this board its own window (or drag its tab in the sidebar out of Flocklet)', () => api.board({ op: 'popout', id: ui.board.id })),
     btn(ui.muted ? 'mute' : 'sound', ui.muted ? 'Sound off (click to turn on)' : 'Sound on (click to mute)', () => api.set({ muted: !ui.muted })),
     btn('dock', 'Pet dock: only the pets, like a taskbar', () => api.set({ dock: true })),
     btn(ui.collapsed ? 'down' : 'up', ui.collapsed ? 'Expand' : 'Collapse', () => api.set({ collapsed: !ui.collapsed })),
@@ -145,7 +145,8 @@ function boardHeader({ ui }, deck) {
     h('span', { class: 'count' }, String(n.working + n.waiting + n.done)),
     h('span', { class: 'spacer' }),
     btn('brush', 'Style of this board', () => { boardStyleOpen = !boardStyleOpen; render(); }, { class: `ib${boardStyleOpen ? ' on' : ''}` }),
-    btn('more', 'More: put inside Main, same style as Main, delete', () => api.boardMenu(b.id)),
+    btn('dockin', 'Move into Main: it becomes a tab in the sidebar (or drag this window onto Main)', () => api.board({ op: 'inside', id: b.id })),
+    btn('more', 'More: same style as Main, delete', () => api.boardMenu(b.id)),
     btn('minimise', 'Hide this board (its button in the sidebar brings it back)', () => api.board({ op: 'hide', id: b.id })));
 }
 // A style tile (a ready-made palette + font). Hover previews it, click picks it.
@@ -171,15 +172,6 @@ function boardStyle(ui) {
       ? h('button', { class: 'b ghostb', onclick: () => { preview = null; api.board({ op: 'theme', id: b.id, theme: null }); } }, 'Same style as Main')
       : h('div', { class: 'hint' }, 'Looks like Main until you pick a style here.'));
 }
-function settingsWinHeader(ui) {
-  return h('header', { class: 'header' },
-    h('span', { class: 'sgear' }, icon('gear')),
-    h('span', { class: 'title' }, ui.settingsAdvanced ? 'All settings' : 'Settings'),
-    ui.board && h('span', { class: 'stylefor', title: 'The style you pick here goes to this board' }, `\u00b7 ${ui.board.name}`),
-    h('span', { class: 'spacer' }),
-    btn('close', 'Close settings', () => api.set({ settingsOpen: false })));
-}
-
 // ---------- minimised bar ----------
 // Collapsed panel: every session in the Sessions list by state.
 // States that need you (waiting, error) get a strong colour; click anything to expand.
@@ -240,10 +232,10 @@ function themer(ui) {
 // Hover a style choice: the real panel shows it until the pointer leaves (nothing is saved until you click).
 let preview = null;
 const systemDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
-function previewOn(theme) { preview = T.normalizeTheme(theme); applyTheme(state.ui); if (VIEW === 'settings') api.preview(preview); }
-function previewOff() { if (!preview) return; preview = null; applyTheme(state.ui); if (VIEW === 'settings') api.preview(null); }
+function previewOn(theme) { preview = T.normalizeTheme(theme); applyTheme(state.ui); }
+function previewOff() { if (!preview) return; preview = null; applyTheme(state.ui); }
 const hoverPreview = (theme) => ({ onmouseenter: () => previewOn(theme), onmouseleave: previewOff });
-function pickTheme(theme) { preview = null; if (VIEW === 'settings') api.preview(null); api.set({ theme }); }
+function pickTheme(theme) { preview = null; api.set({ theme }); }
 
 function applyTheme(ui) {
   const t = preview || ui.theme || T.DEFAULT;
@@ -660,17 +652,63 @@ function dockView(cards, ui) {
 // ---------- sidebar rail + drawers ----------
 // The rail sits on one side of the deck (ui.rail); its drawer opens outward beyond it (main sizes the window).
 const openDrawer = (name) => { menuFor = null; api.set({ drawer: state.ui.drawer === name ? null : name }); };
-// A board's button: its colours and first letter; click shows or hides it, right-click for more.
-function boardButton(b, cards) {
+// A board's square: its colours and first letter.
+function boardSquare(b) {
   const pal = T.PALETTES.find((p) => p.id === (b.theme || {}).palette) || T.PALETTES[0];
-  const waiting = cards.filter((c) => c.board === b.id && c.group === 'active' && c.state === 'waiting').length;
   const sq = h('span', { class: 'bsq' }, (b.name.trim()[0] || 'B').toUpperCase());
   sq.style.setProperty('--s-bg', pal.swatch.bg);
   sq.style.setProperty('--s-acc', pal.swatch.accent);
-  return h('button', { class: `rbtn rboard${b.visible ? ' on' : ''}`, 'aria-pressed': b.visible ? 'true' : 'false', 'aria-label': b.name,
-    title: `${b.name}${waiting ? ` (${waiting} need${waiting > 1 ? '' : 's'} you)` : ''}: click to ${b.visible ? 'hide' : 'show'} · right-click for more`,
-    onclick: () => api.board({ op: 'toggle', id: b.id }), oncontextmenu: (e) => { e.preventDefault(); api.boardMenu(b.id); } },
-  sq, waiting > 0 && h('span', { class: 'rdot' }));
+  return sq;
+}
+const waitingOn = (cards, id) => cards.filter((c) => (c.board || null) === id && c.group === 'active' && c.state === 'waiting').length;
+const needs = (n) => (n ? ` · ${n} need${n > 1 ? '' : 's'} you` : '');
+// Main's card shows one board at a time: Main itself, or a board that lives on it. Drop a session on a tab to move it.
+function railTabs(ui, cards) {
+  const view = ui.boardView || null;
+  const home = waitingOn(cards, null);
+  const tab = (b) => {
+    const n = waitingOn(cards, b.id);
+    return h('button', { class: `rbtn rtab${view === b.id ? ' on' : ''}`, 'data-drop': `board:${b.id}`, 'data-board': b.id, 'aria-label': b.name,
+      title: `${b.name}${needs(n)}: show it on the main card · drag it out of Flocklet for its own window · right-click for more`,
+      onclick: () => api.board({ op: 'view', id: b.id }), oncontextmenu: (e) => { e.preventDefault(); api.boardMenu(b.id); } },
+    boardSquare(b), n > 0 && h('span', { class: 'rdot' }));
+  };
+  return h('div', { class: 'rsec rtabs', title: '' },
+    h('button', { class: `rbtn rtab home${view ? '' : ' on'}`, 'data-drop': 'main', 'aria-label': 'Main',
+      title: `Main${needs(home)}: your sessions that are on no board`, onclick: () => api.board({ op: 'view', id: null }) },
+    icon('home'), home > 0 && view && h('span', { class: 'rdot' })),
+    (ui.boards || []).filter((b) => b.inside).map(tab),
+    h('button', { class: 'rbtn rtab add', 'data-drop': 'new', 'aria-label': 'New board',
+      title: 'New board on the main card (or drop a session or group here)', onclick: () => api.board({ op: 'new' }) }, icon('plus')));
+}
+// Boards in their own windows: one toggle each (show / hide), and a menu for all of them.
+function railWindows(ui, cards) {
+  const outside = (ui.boards || []).filter((b) => !b.inside);
+  const toggle = (b) => {
+    const n = waitingOn(cards, b.id);
+    return h('button', { class: `rbtn rtoggle${b.visible ? ' on' : ''}`, 'data-drop': `board:${b.id}`, 'data-board': b.id, 'aria-label': b.name,
+      'aria-pressed': b.visible ? 'true' : 'false',
+      title: `${b.name}${needs(n)}: ${b.visible ? 'hide' : 'show'} its window · drag it onto the tabs to put it on the main card · right-click for more`,
+      onclick: () => api.board({ op: 'toggle', id: b.id }), oncontextmenu: (e) => { e.preventDefault(); api.boardMenu(b.id); } },
+    boardSquare(b), h('span', { class: 'rwin' }), n > 0 && h('span', { class: 'rdot' }));
+  };
+  return h('div', { class: `rsec rwins${outside.length ? '' : ' empty'}` },
+    outside.map(toggle),
+    h('span', { class: 'rslot', title: 'Drop a tab here to give it its own window' }),
+    outside.length > 0 && btn('layers', 'All board windows: hide them, bring back the ones you hid, show them', () => api.boardMenu(null), { class: 'ib small rall' }));
+}
+// The Sessions / Settings card: two tabs, a grip to dock it on another side of the deck, close.
+function drawerCard(cards, ui) {
+  const tabs = [['sessions', 'Sessions'], ['settings', 'Settings']];
+  return [
+    h('div', { class: 'dtop' },
+      h('div', { class: 'seg dtabs' }, tabs.map(([k, label]) =>
+        h('button', { class: `segb${ui.drawer === k ? ' on' : ''}`, onclick: () => api.set({ drawer: k }) }, label))),
+      h('span', { class: 'spacer' }),
+      h('div', { class: 'dgrip', title: 'Drag to another side of the panel' }, icon('grip')),
+      btn('close', 'Close', () => api.set({ drawer: null }), { class: 'ib small' })),
+    ui.drawer === 'sessions' ? browser(cards, ui) : settingsDrawer(ui),
+  ];
 }
 function railButton(name, iconName, label, badge) {
   const on = state.ui.drawer === name;
@@ -765,7 +803,7 @@ function advancedSettings(ui) {
         h('button', { class: `segb${!ui.dock && ui.collapsed ? ' on' : ''}`, onclick: () => api.set({ dock: false, collapsed: true }) }, 'Minimised'),
         h('button', { class: `segb${ui.dock ? ' on' : ''}`, onclick: () => api.set({ dock: true }) }, 'Pet dock'))),
     h('section', null, h('div', { class: 'slabel' }, 'Order'),
-      h('div', { class: 'hint' }, 'Drag a card, a pet or a group name to move it. A parent takes its children along. Drag one out of the panel to make a board.'),
+      h('div', { class: 'hint' }, 'Drag a card, a pet or a group name to move it. A parent takes its children along. Drop it on a tab in the sidebar to move it to that board, on + for a new one, or outside Flocklet for a board in its own window.'),
       ui.ordered && h('div', { class: 'btnrow' },
         h('button', { class: 'b', onclick: () => api.order({ reset: true }) }, 'Back to automatic order')),
       ui.ordered && h('div', { class: 'hint' }, 'Automatic: sessions that need you first, then the most recent.')),
@@ -809,16 +847,17 @@ function advancedSettings(ui) {
 }
 function renderShell(cards, ui) {
   const shell = document.getElementById('shell');
-  if (VIEW !== 'main') { // a board or Settings: just the panel, no sidebar
+  if (VIEW !== 'main') { // a board window: just the panel, no sidebar
     shell.className = 'shell solo';
     shell.style.setProperty('--deckw', `${ui.width || 340}px`);
-    if (VIEW === 'board' && ui.deckHeight != null) shell.style.setProperty('--deckh', `${ui.deckHeight - 24}px`); else shell.style.removeProperty('--deckh');
+    if (ui.deckHeight != null) shell.style.setProperty('--deckh', `${ui.deckHeight - 24}px`); else shell.style.removeProperty('--deckh');
     document.getElementById('rail').replaceChildren();
     document.getElementById('drawer').hidden = true;
     return;
   }
   const side = ui.rail || 'left';
-  shell.className = `shell side-${side}${ui.dock ? ' docked' : ui.collapsed ? ' minimised' : ''}${ui.drawer && !ui.dock ? ' open' : ''}`;
+  const dside = ui.drawerSide || side;
+  shell.className = `shell side-${side} dside-${dside}${ui.dock ? ' docked' : ui.collapsed ? ' minimised' : ''}${ui.drawer && !ui.dock ? ' open' : ''}`;
   document.body.classList.toggle('docked', !!ui.dock);
   shell.style.setProperty('--deckw', `${ui.width || 368}px`);
   if (ui.deckHeight != null) shell.style.setProperty('--deckh', `${ui.deckHeight - 24}px`); else shell.style.removeProperty('--deckh');
@@ -829,27 +868,26 @@ function renderShell(cards, ui) {
     rail.replaceChildren(h('button', { class: 'rexpand', title: 'Show the sidebar', 'aria-label': 'Show the sidebar',
       onclick: () => api.set({ railMin: false }) }, icon('sidebar')));
   } else {
-    const boards = ui.boards || [];
     rail.replaceChildren(...[
       railButton('sessions', 'list', 'Sessions', cards.length),
-      boards.length > 0 && h('div', { class: 'rboards' }, boards.map((b) => boardButton(b, cards)),
-        btn('layers', 'All boards: hide them, bring back the ones you hid, show them', () => api.boardMenu(null), { class: 'ib small rall' })),
+      railTabs(ui, cards),
+      railWindows(ui, cards),
       h('span', { class: 'spacer' }),
-      h('button', { class: `rbtn${ui.settingsOpen ? ' on' : ''}`, title: ui.settingsOpen ? 'Close settings' : 'Settings', 'aria-label': 'Settings',
-        'aria-pressed': ui.settingsOpen ? 'true' : 'false', onclick: () => api.set({ settingsOpen: !ui.settingsOpen }) }, icon('gear')),
+      railButton('settings', 'gear', 'Settings'),
       btn('minimise', 'Minimise the sidebar', () => api.set({ railMin: true }), { class: 'ib small rmin' }),
       h('div', { class: 'rgrip', id: 'rgrip', title: 'Drag to another side of the panel' }, icon('grip')),
     ].filter(Boolean));
   }
   const drawer = document.getElementById('drawer');
-  drawer.hidden = ui.drawer !== 'sessions' || !!ui.dock || !!ui.railMin; // opens while minimised too, not in the pet dock
+  drawer.hidden = !ui.drawer || !!ui.dock || !!ui.railMin; // opens while minimised too, not in the pet dock
   if (drawer.hidden) drawer.replaceChildren();
-  else drawer.replaceChildren(browser(cards, ui));
+  else drawer.replaceChildren(...drawerCard(cards, ui));
 }
 
-// Drag the rail's dots to dock it on another side: the side of the panel nearest the pointer wins.
+// Drag the rail's dots, or the card's, to dock it on another side: the side of the panel nearest the pointer wins.
 (function dockByDrag() {
   let dragging = false;
+  let what = 'rail'; // or 'drawerSide' (the Sessions / Settings card)
   const sideAt = (x, y) => {
     const r = document.getElementById('panel').getBoundingClientRect();
     const d = { left: Math.abs(x - r.left), right: Math.abs(x - r.right), top: Math.abs(y - r.top), bottom: Math.abs(y - r.bottom) };
@@ -861,7 +899,9 @@ function renderShell(cards, ui) {
   };
   const shell = document.getElementById('shell');
   shell.addEventListener('pointerdown', (e) => {
-    if (!e.target.closest('#rgrip') || e.button !== 0) return;
+    const grip = e.target.closest('#rgrip, .dgrip');
+    if (!grip || e.button !== 0) return;
+    what = grip.id === 'rgrip' ? 'rail' : 'drawerSide';
     e.preventDefault();
     e.target.setPointerCapture(e.pointerId);
     dragging = true;
@@ -877,7 +917,8 @@ function renderShell(cards, ui) {
     document.body.classList.remove('docking');
     const side = shell.dataset.dock;
     delete shell.dataset.dock;
-    if (side && side !== state.ui.rail && e.type === 'pointerup') api.set({ rail: side });
+    const now = what === 'rail' ? state.ui.rail : state.ui.drawerSide || state.ui.rail;
+    if (side && side !== now && e.type === 'pointerup') api.set({ [what]: side });
   };
   shell.addEventListener('pointerup', end);
   shell.addEventListener('pointercancel', end);
@@ -896,10 +937,7 @@ function render() {
   const caret = focused ? document.activeElement.selectionStart : null;
   applyTheme(ui);
   let kids;
-  if (VIEW === 'settings') {
-    panel.className = 'panel settingswin';
-    kids = [settingsWinHeader(ui), settingsDrawer(ui)];
-  } else {
+  {
     panel.className = `panel${ui.dock ? ' dock' : ui.collapsed ? ' collapsed' : ''}${ui.fixedHeight ? ' fixed' : ''}`;
     kids = ui.dock ? dockView(deck, ui).filter(Boolean) : [VIEW === 'board' ? boardHeader(state, deck) : header(state, deck)];
     if (VIEW === 'board' && boardStyleOpen) kids.push(boardStyle(ui));
@@ -1046,12 +1084,6 @@ for (const el of document.querySelectorAll('.rz')) {
 function reportSize() {
   const panel = document.getElementById('panel');
   if (VIEW === 'carry') return;
-  if (VIEW === 'settings') {
-    const head = panel.querySelector('.header');
-    const body = panel.querySelector('.settings');
-    api.resize(Math.ceil((head ? head.offsetHeight : 0) + (body ? body.scrollHeight : 0)) + 26, {});
-    return;
-  }
   let height = 0;
   let listFull = 0;
   for (const el of panel.children) {
@@ -1113,7 +1145,6 @@ function detectTransitions(cards) {
 }
 
 api.onDropzone((on) => document.getElementById('panel').classList.toggle('dropzone', on));
-api.onPreview((t) => { if (VIEW !== 'main' || !state) return; preview = t ? T.normalizeTheme(t) : null; applyTheme(state.ui); });
 api.onState((s) => {
   state = s;
   detectTransitions(s.cards);
