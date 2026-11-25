@@ -1296,8 +1296,13 @@ function detectTransitions(cards) {
 
 api.onDropzone((on) => document.getElementById('panel').classList.toggle('dropzone', on));
 api.onFx((what) => {
-  if (what !== 'into-main' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const p = document.getElementById('panel');
+  if (what === 'vanish') { // emptied: the board shrinks away
+    p.animate([{ transform: 'none', opacity: 1 }, { transform: 'scale(0.6)', opacity: 0 }], { duration: 220, easing: 'ease-in', fill: 'forwards' });
+    return;
+  }
+  if (what !== 'into-main') return;
   p.animate([{ transform: 'none', opacity: 1 }, { transform: 'scale(1.03)', opacity: 1, offset: 0.25 }, { transform: 'scale(0.15)', opacity: 0 }],
     { duration: 260, easing: 'cubic-bezier(.5,0,.8,.4)', fill: 'forwards' });
 });

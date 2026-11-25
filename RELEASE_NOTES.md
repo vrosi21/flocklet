@@ -1,7 +1,1 @@
-- **Fix: clicking an old Flocklet notification crashed Flocklet.** Flocklet now keeps its notifications until it closes them itself, closes them when it quits, and clears leftovers from earlier runs. If it ever crashes, a crash report stays on your PC (nothing is sent).
-- **Sidebar:** it no longer hides. Its eye button hides the panels (the main card, Sessions / Settings and every board) and brings back the same ones. The minimise button now lives here and sends everything to the tray. Above or below the panel, the sidebar spans the full width.
-- **Boards:** each board can have an icon (pick one in its style popover) and can be shown as a pet dock. Drop a board beside another and they join into one; drop it above or below and they stack. A board that joins another takes its type (dock or cards). Drag a board window onto the main panel and it folds into a tab.
-- **Right-click a session** for: open, pin or unpin, hide, mute, pet and colour, or move it to a board. Pin is also on every card now.
-- **Your names:** rename a project with the pencil on its header (only in Flocklet). The pet dock shows session names, and project names only if you turn them on. New boards no longer take folder names; you name them.
-- **Tooltips and menus** match your style. The dock is spaced more evenly, and the Sessions / Settings card sits left or right of the panel, never above or below.
-- **Fix:** dragging everything out of a board used to leave an empty copy behind. Now the board itself moves.
+- **Empty boards go away.** When you move the last sessions off a board (onto another board or the main panel), that board disappears: a board window shrinks away, a tab is removed. The main panel never does, and a new empty board you just made with + stays until you use it.

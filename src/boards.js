@@ -99,6 +99,12 @@ function moveTo(cfg, items, target) {
   }
 }
 
+// The boards that hold something: a project or group rule, or a session placed on them (placed = place()'s output).
+function withContent(boards, placed) {
+  const has = new Set(placed.map((c) => c.board).filter(Boolean));
+  return new Set(boards.filter((b) => b.projects.length || b.groups.length || has.has(b.id)).map((b) => b.id));
+}
+
 function addBoard(cfg, { id, name, pos, items }) {
   if (!BOARD_RE.test(id) || cfg.boards.length >= MAX_BOARDS) return null;
   const b = { id, name: uniqueName(cfg.boards, cleanName(name)), theme: null, projects: [], groups: [], inside: false, visible: true,
@@ -201,5 +207,5 @@ function showAll(cfg) {
   cfg.hiddenByAll = [];
 }
 
-module.exports = { BOARD_RE, ICONS, DEFAULT_W, MAX_BOARDS, normalizeBoards, normalizeSessionBoard, place, moveTo, addBoard, removeBoard,
+module.exports = { BOARD_RE, ICONS, DEFAULT_W, MAX_BOARDS, normalizeBoards, normalizeSessionBoard, place, withContent, moveTo, addBoard, removeBoard,
   snapTo, snapBest, stuckPos, joins, stuckChain, uniqueName, hideAll, restoreHidden, showAll, cleanName };

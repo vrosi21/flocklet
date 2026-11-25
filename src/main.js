@@ -1131,9 +1131,27 @@ function boardDrag(bw, edge, phase, dx, dy) {
   }
 }
 
+// A board you moved the last of its sessions out of (onto another board or Main) vanishes; Main never does.
+// An empty board you just made with + stays (it only goes when something leaves it empty).
+const contentNow = () => Boards.withContent(cfg.boards, Boards.place(lastCards || [], cfg));
+function dropEmptied(before) {
+  const after = contentNow();
+  for (const id of before) if (!after.has(id) && boardById(id)) vanishBoard(id);
+}
+function vanishBoard(id) {
+  log('board', { emptied: id });
+  const bw = boardWins.get(id);
+  if (bw && !bw.win.isDestroyed() && bw.win.isVisible()) { // its window shrinks away first
+    bw.win.webContents.send('fx', 'vanish');
+    setTimeout(() => { if (!boardById(id)) return; Boards.removeBoard(cfg, id); saveConfig(); syncBoards(); pushState(); fitWindow(); }, 240);
+    return;
+  }
+  Boards.removeBoard(cfg, id);
+}
 function boardOp(op) {
   if (!op || typeof op !== 'object') return;
   const b = boardById(op.id);
+  const before = op.op === 'move' || op.op === 'new' ? contentNow() : null;
   switch (op.op) {
     case 'rename': if (!b) return; b.name = Boards.cleanName(op.name, b.name); break;
     case 'theme': if (!b) return; b.theme = op.theme && typeof op.theme === 'object' ? Themes.normalizeTheme(op.theme) : null; break;
@@ -1182,6 +1200,7 @@ function boardOp(op) {
     case 'showAll': Boards.showAll(cfg); break;
     default: return;
   }
+  if (before) dropEmptied(before);
   saveConfig();
   syncBoards();
   pushState();
@@ -1307,6 +1326,7 @@ function wholeBoard(src, items) {
 }
 function carryDrop(items, p, from = null) {
   const t = dropTarget(p);
+  const before = contentNow();
   if (t.key === 'none') { pushState(); return; } // on Settings: nothing moves
   const src = boardById(from);
   if (t.key === 'new' && wholeBoard(src, items)) { // the board itself moves there (no empty twin left behind)
@@ -1322,12 +1342,14 @@ function carryDrop(items, p, from = null) {
     const b = Boards.addBoard(cfg, { id, name: boardNameFor(items), pos: { x: p.x - px(70), y: p.y - px(22) }, items });
     if (!b) return;
     b.fresh = /^Board \d+$/.test(b.name);
+    dropEmptied(before);
     const size = { width: px(b.width), height: px(160) };
     b.stuck = mainShown() ? Boards.snapTo({ ...b.pos, ...size }, win.getBounds(), px(28)) : null;
     if (b.stuck) b.stuck = { to: 'main', ...b.stuck };
     log('board', { made: id, from: items.project != null ? 'project' : items.group != null ? 'group' : `${items.keys.length} sessions` });
   } else {
     Boards.moveTo(cfg, items, t.board);
+    dropEmptied(before);
   }
   saveConfig();
   syncBoards();

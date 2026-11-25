@@ -104,3 +104,12 @@ test('board names stay unique; a board stuck to one that is gone floats free', (
   assert.deepEqual(cfg.boards.map((b) => b.name), ['Content', 'content 2', 'Content 3']);
   assert.equal(B.normalizeBoards([{ id: 'b_00000001', stuck: { to: 'b_0000dead', side: 'left', along: 0 } }])[0].stuck, null);
 });
+
+test('a board holds something when it has a rule or a session on it', () => {
+  const cfg = cfgWith([{ id: 'b_00000001', projects: ['c:/p/two'] }, { id: 'b_00000002' }, { id: 'b_00000003' }]);
+  cfg.sessionBoard = { a: 'b_00000002' };
+  const placed = B.place([card('a'), card('b')], cfg);
+  assert.deepEqual([...B.withContent(cfg.boards, placed)].sort(), ['b_00000001', 'b_00000002']);
+  B.moveTo(cfg, { keys: ['a'] }, null);
+  assert.deepEqual([...B.withContent(cfg.boards, B.place([card('a'), card('b')], cfg))], ['b_00000001'], 'its last session moved away: empty');
+});

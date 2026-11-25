@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.4
+
+- A board emptied by a move (`ui:board` move / new, a drop on a board or Main) is removed: `Boards.withContent`
+  before and after the move; a visible board window plays a short shrink (`fx` 'vanish') first. Main never goes; an
+  empty board made with + stays until something empties it.
+
 ## 0.6.3
 
 - Crash fix: notifications were released on 'close' (they leave the screen but stay clickable in the notification
