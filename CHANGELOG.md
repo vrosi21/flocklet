@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.6
+
+- Magnet on what you see (`insetsOf`, `shown`): stuck panels 6 px apart (windows overlap their clear margins),
+  side-joined boards touch, stacked boards 6 px (their 3 px joined margins). Drops within 16 px of lining up line up
+  (`alignAlong`); a board within 10 px of being as near as Main wins (`snapBest`, you stack on it).
+- `placeStuck`: own side if it fits on the screen, else the first free other side (skips what other boards cover),
+  else pulled onto the screen; it keeps its own side for later.
+- `cfg.mainHidden`: minimise the main card (header button, the dock's minimise, Home while on it); the window is
+  just the sidebar, boards stay and can stick to it. When Main grows back, free boards in its way move aside
+  (`pushOut`).
+- Pet dock: a click on a pet hops it and opens its chat (`hopToChat`; double-click is gone). Its details card opens from
+  the arrow shown on hover (`.dinfo`) or the right-click menu ("Details", also in Windows' own menu via `fx`
+  `details:<key>`). A pet with no chat to open shows its details on click.
+- Cursors per action: chat (pointer + speech bubble) on cards, dock pets and session rows that open a chat; details
+  (pointer + card) on the arrow; paw on what you pick up; text / default inside a card's answer box.
+- Dev copy tests: `test:op` `moveMain`; with `FLOCKLET_FAKE` a jump is only logged (fake sessions have no chat).
+
 ## 0.6.5
 
 - News on sidebar tabs and window toggles for boards you are not looking at (`news()`): amber = waiting, red =

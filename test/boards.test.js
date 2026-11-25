@@ -75,8 +75,8 @@ test('saved boards are checked: bad ids, names and sides are dropped or fixed', 
 test('boards stick to Main or to each other; side by side they join, stacked they stay apart', () => {
   const main = { id: 'main', rect: { x: 1000, y: 0, width: 400, height: 500 } };
   const other = { id: 'b_00000002', rect: { x: 600, y: 0, width: 340, height: 120 } };
-  assert.deepEqual(B.snapBest({ x: 942, y: 10, width: 50, height: 60 }, [main, other]), { to: 'b_00000002', side: 'right', along: 10 },
-    'touching both: the nearer edge wins');
+  assert.deepEqual(B.snapBest({ x: 942, y: 10, width: 50, height: 60 }, [main, other]), { to: 'b_00000002', side: 'right', along: 0 },
+    'touching both: the nearer edge wins (and it lines up with its top)');
   assert.deepEqual(B.snapBest({ x: 600, y: 125, width: 340, height: 120 }, [main, other]), { to: 'b_00000002', side: 'bottom', along: 0 });
   assert.equal(B.snapBest({ x: 0, y: 900, width: 10, height: 10 }, [main, other]), null);
   const cfg = cfgWith([
@@ -112,4 +112,34 @@ test('a board holds something when it has a rule or a session on it', () => {
   assert.deepEqual([...B.withContent(cfg.boards, placed)].sort(), ['b_00000001', 'b_00000002']);
   B.moveTo(cfg, { keys: ['a'] }, null);
   assert.deepEqual([...B.withContent(cfg.boards, B.place([card('a'), card('b')], cfg))], ['b_00000001'], 'its last session moved away: empty');
+});
+
+test('magnet: edges line up when you drop it nearly in line; gaps; never off the screen; pushed out of the way', () => {
+  const m = { x: 100, y: 100, width: 300, height: 400 };
+  assert.deepEqual(B.snapTo({ x: 402, y: 112, width: 200, height: 100 }, m), { side: 'right', along: 0 }, 'tops lined up');
+  assert.deepEqual(B.snapTo({ x: 402, y: 392, width: 200, height: 100 }, m), { side: 'right', along: 300 }, 'bottoms lined up');
+  assert.deepEqual(B.snapTo({ x: 190, y: 505, width: 200, height: 100 }, m), { side: 'bottom', along: 100 }, 'right edges lined up');
+  assert.deepEqual(B.snapTo({ x: 402, y: 200, width: 200, height: 100 }, m), { side: 'right', along: 100 }, 'far from any edge: as dropped');
+  assert.deepEqual(B.stuckPos(m, { width: 200, height: 100 }, { side: 'right', along: 0 }, 6), { x: 406, y: 100 });
+  const screen = { x: 0, y: 0, width: 1000, height: 800 };
+  const right = { x: 700, y: 100, width: 300, height: 300 };
+  assert.deepEqual(B.placeStuck(right, { width: 200, height: 100 }, { side: 'right', along: 0 }, 6, screen), { x: 494, y: 100, width: 200, height: 100 },
+    'no room on the right: it goes to the left');
+  assert.deepEqual(B.placeStuck(m, { width: 200, height: 100 }, { side: 'right', along: 0 }, 6, screen), { x: 406, y: 100, width: 200, height: 100 });
+  assert.deepEqual(B.pushOut({ x: 380, y: 120, width: 100, height: 80 }, m, 6, screen), { x: 406, y: 120 }, 'pushed right, the shortest way');
+  assert.deepEqual(B.pushOut({ x: 900, y: 0, width: 50, height: 50 }, m, 6, screen), null, 'not in the way: stays');
+  assert.deepEqual(B.pushOut({ x: 110, y: 120, width: 100, height: 80 }, { x: 0, y: 100, width: 1000, height: 400 }, 6, screen), { x: 110, y: 14 },
+    'no room beside it: up instead');
+});
+
+test('magnet: a board about as near as Main wins (you stack on it); a side that is taken is skipped', () => {
+  const main = { id: 'main', rect: { x: 100, y: 100, width: 300, height: 400 } };
+  const above = { id: 'b_00000002', rect: { x: 406, y: 100, width: 200, height: 150 } };
+  assert.deepEqual(B.snapBest({ x: 420, y: 268, width: 120, height: 80 }, [main, above]), { to: 'b_00000002', side: 'bottom', along: 0 },
+    '20 px from Main, 18 px below the board: stacks under the board');
+  const screen = { x: 0, y: 0, width: 1000, height: 900 };
+  const atEdge = { x: 700, y: 100, width: 300, height: 300 };
+  const taken = [{ x: 494, y: 100, width: 200, height: 150 }];
+  assert.deepEqual(B.placeStuck(atEdge, { width: 200, height: 100 }, { side: 'right', along: 0 }, 6, screen, taken), { x: 700, y: 406, width: 200, height: 100 },
+    'no room on the right, the left is taken: below');
 });

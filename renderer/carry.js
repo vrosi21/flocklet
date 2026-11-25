@@ -530,7 +530,7 @@
     swallowClick = false;
     if (e.button !== 0 || drag || !state) return;
     const t = e.target;
-    if (!(t instanceof Element) || t.closest('input, textarea, select, .waitbox, .petpop, .actions, .dend, .dmore, .newgroup')) return;
+    if (!(t instanceof Element) || t.closest('input, textarea, select, .waitbox, .petpop, .actions, .dend, .dmore, .newgroup, .dinfo')) return;
     let p = null;
     const rb = t.closest('.rail [data-board]');
     if (rb) p = { where: 'rail', kind: 'board', key: rb.dataset.board };

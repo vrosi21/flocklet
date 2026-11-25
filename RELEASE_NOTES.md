@@ -1,5 +1,5 @@
-- **See where it happened.** A tab or board button in the sidebar now shows a dot when something happens on a board you are not looking at: green with a count when sessions finished, amber when one needs you, red when one stopped. When the chime plays, the tab it came from pulses, and a board window you can see pulses itself. Opening the board clears its dot.
-- **The pet dock keeps the sidebar**, so you can switch tabs while docked; every tab on the main card then shows as a dock.
-- **Fix:** with the sidebar above or below, a narrow panel was pushed off the window's edge. The window now always makes room for the sidebar.
-- **Fix:** with board windows open, the chime played once per window. It now plays once.
-- **Updates show the installer.** After "Restart now" you see a small progress window, so Flocklet no longer just disappears when a quiet install fails.
+- **Tidier stacking.** Boards that stick to the main panel or to each other now sit exactly 6 px apart, and edges line up when you drop one nearly in line. Dropped about as near a board as the main panel, a board stacks on the board.
+- **Minimise the main card.** The new minimise button on the main card (or a click on Home while you are on it) leaves just the sidebar. Your boards stay, and you can stack boards against the sidebar. Click Home to bring the card back: boards in its way move aside.
+- **Dock pets go straight to the chat.** Click a pet: it hops and you are in its chat. The small arrow that appears when you hover over a pet opens its details.
+- **The cursor shows what a click does.** A speech bubble opens the chat, a little card opens details, and a paw picks a pet up to move it.
+- **Nothing goes off the screen.** A board stuck to the main panel moves to another free side when its own side has no room, and comes back when there is room again.

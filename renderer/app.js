@@ -114,7 +114,8 @@ function header({ ui }, deck) {
     ui.board && btn('popout', 'Give this board its own window (or drag its tab in the sidebar out of Flocklet)', () => api.board({ op: 'popout', id: ui.board.id })),
     btn(ui.muted ? 'mute' : 'sound', ui.muted ? 'Sound off (click to turn on)' : 'Sound on (click to mute)', () => api.set({ muted: !ui.muted })),
     btn('dock', 'Pet dock: only the pets, like a taskbar', () => api.set({ dock: true })),
-    btn(ui.collapsed ? 'down' : 'up', ui.collapsed ? 'Expand' : 'Collapse', () => api.set({ collapsed: !ui.collapsed })));
+    btn(ui.collapsed ? 'down' : 'up', ui.collapsed ? 'Expand' : 'Collapse', () => api.set({ collapsed: !ui.collapsed })),
+    btn('minimise', 'Minimise this card: the sidebar stays, and so do your boards (click Home to bring it back)', () => api.set({ mainHidden: true })));
 }
 
 // ---------- boards (src/boards.js): a board window's header, its name and its style ----------
@@ -184,7 +185,7 @@ function sessionMenu(e, c, where) {
   e.preventDefault();
   e.stopPropagation();
   closeMenu();
-  if (innerWidth < 230 || innerHeight < 230) { api.sessionMenu(c.key); return; } // too small a window (a dock): Windows' own menu
+  if (innerWidth < 230 || innerHeight < 230) { api.sessionMenu(c.key, where === 'dock'); return; } // too small a window (a dock): Windows' own menu
   const ui = state.ui;
   const here = c.board || null;
   const item = (label, lead, fn) => h('button', { class: 'ctxi', role: 'menuitem', onclick: () => { closeMenu(); fn(); } },
@@ -193,6 +194,7 @@ function sessionMenu(e, c, where) {
   ctx = h('div', { class: 'ctxmenu', role: 'menu', 'aria-label': c.name },
     h('div', { class: 'ctxhead' }, c.name),
     c.canJump && item('Open in Claude', icon('jump'), () => api.jump(c.hostId)),
+    where === 'dock' && item(dockOpen === c.key ? 'Hide the details' : 'Details', icon(dockOpen === c.key ? 'down' : 'up'), () => clickDockPet(c)),
     item(c.pinned ? 'Unpin' : 'Pin: keep this card', icon('pin'), () => api.pin(c.key, !c.pinned)),
     c.group === 'active' && !c.pinned && item('Hide this card', icon('close'), () => api.hideCard(c.id)),
     item(c.quiet ? 'Turn notifications on' : 'Mute notifications', icon(c.quiet ? 'bell' : 'bellOff'), () => api.quiet(c.key, !c.quiet)),
@@ -508,7 +510,7 @@ function foldBadge(it) {
 }
 
 function card(c, depth = 0, it = null) {
-  const el = h('div', { class: `card ${c.state}${depth ? ' child' : ''}${c.pinned ? ' pinned' : ''}`,
+  const el = h('div', { class: `card ${c.state}${depth ? ' child' : ''}${c.pinned ? ' pinned' : ''}${c.canJump ? ' canjump' : ''}`,
     style: `${petColor(c)};--depth:${depth}`, title: c.cwd || '', 'data-k': c.key },
   avatar(c),
   h('div', { class: 'body' },
@@ -674,11 +676,18 @@ function markSeen(c) {
   seenBubbles.set(c.key, bubbleSig(c));
   render();
 }
-// Click any pet: its card pops up above the dock (status, step, ctx, answer box); click again to fold it.
+// A pet's details: its card pops up above the dock (status, step, ctx, answer box); again folds it.
 function clickDockPet(c) {
   seenBubbles.set(c.key, bubbleSig(c));
   dockOpen = dockOpen === c.key ? null : c.key;
   render();
+}
+// Click a pet: a quick hop, and you are in its chat. A pet with no chat to open shows its details instead.
+function hopToChat(c) {
+  if (!c.canJump) { clickDockPet(c); return; }
+  seenBubbles.set(c.key, bubbleSig(c));
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) emote(c.key, 'hop');
+  api.jump(c.hostId);
 }
 const DOCK_WORD = { waiting: 'needs you', working: 'working', done: 'done', error: 'stopped with an error', idle: 'idle' };
 const dockWord = (c) => (c.limited ? 'out of usage' : DOCK_WORD[c.state] || 'idle');
@@ -686,11 +695,15 @@ function dockPet(c, open, names) {
   const b = bubbleOf(c);
   const unseen = b && seenBubbles.get(c.key) !== bubbleSig(c);
   const word = c.state === 'waiting' && c.waiting ? (WAIT_LABEL[c.waiting.kind] || 'Needs you') : dockWord(c);
-  return h('button', { class: `dpet ${c.state}${c.limited ? ' limited' : ''}${open && open.key === c.key ? ' on' : ''}${names ? ' named' : ''}`, style: petColor(c),
-    title: `${c.name}: ${word} · double-click to open, drag to move`, 'aria-label': `${c.name}: ${word}`, 'data-k': c.key,
-    onclick: () => clickDockPet(c), ondblclick: () => c.canJump && api.jump(c.hostId), onmouseenter: () => markSeen(c),
+  const on = !!open && open.key === c.key;
+  return h('button', { class: `dpet ${c.state}${c.limited ? ' limited' : ''}${on ? ' on' : ''}${names ? ' named' : ''}${c.canJump ? ' canjump' : ''}`, style: petColor(c),
+    title: `${c.name}: ${word} · ${c.canJump ? 'click: open the chat · arrow: details' : 'click: details'} · drag: move`,
+    'aria-label': `${c.name}: ${word}`, 'data-k': c.key,
+    onclick: () => hopToChat(c), onmouseenter: () => markSeen(c),
     oncontextmenu: (e) => sessionMenu(e, c, 'dock') },
   unseen && h('span', { class: `bubble ${c.limited ? 'limited' : c.state}` }, b),
+  c.canJump && h('span', { class: 'dinfo', 'aria-hidden': 'true', title: on ? 'Hide the details' : 'Details',
+    onclick: (e) => { e.stopPropagation(); clickDockPet(c); } }, icon(on ? 'down' : 'up')),
   h('span', { class: 'dpetimg' }, pet(c.pet, P.petState(c), { 'data-key': c.key })),
   names && h('span', { class: 'dname' }, c.name),
   h('span', { class: `dbar ${c.limited ? 'limited' : c.state}` }));
@@ -750,7 +763,7 @@ function dockView(cards, ui) {
         btn('expand', VIEW === 'board' ? 'Show as cards' : 'Open the full panel', () => toCards(), { class: 'ib small' }),
         VIEW === 'board'
           ? btn('minimise', 'Hide this board (its button in the sidebar brings it back)', () => api.board({ op: 'hide', id: BOARD_ID }), { class: 'ib small' })
-          : btn('minimise', 'Hide to the tray', () => api.hide(), { class: 'ib small' })))
+          : btn('minimise', 'Minimise this dock: the sidebar stays (click Home to bring it back)', () => api.set({ mainHidden: true }), { class: 'ib small' })))
   ];
 }
 
@@ -761,7 +774,7 @@ const openDrawer = (name) => {
   if (state.ui.panelsHidden) api.set({ panelsHidden: false, drawer: name }); // panels hidden: bring them back with it
   else api.set({ drawer: state.ui.drawer === name ? null : name });
 };
-const unhide = () => { if (state.ui.panelsHidden) api.set({ panelsHidden: false }); };
+const unhide = () => { if (state.ui.panelsHidden || state.ui.mainHidden) api.set({ panelsHidden: false, mainHidden: false }); };
 // A board's square: its colours, and its icon or first letter.
 function boardSquare(b) {
   const pal = T.PALETTES.find((p) => p.id === (b.theme || {}).palette) || T.PALETTES[0];
@@ -816,8 +829,14 @@ function railTabs(ui, cards) {
     boardSquare(b), newsDot(n)), view === b.id ? '-' : b.id);
   };
   return h('div', { class: 'rsec rtabs', title: '' },
-    pingOn(h('button', { class: `rbtn rtab home${view ? '' : ' on'}`, 'data-drop': 'main', 'aria-label': 'Main',
-      title: `Main${needs(home)}: your sessions that are on no board`, onclick: () => { unhide(); api.board({ op: 'view', id: null }); } },
+    pingOn(h('button', { class: `rbtn rtab home${view || ui.mainHidden ? '' : ' on'}`, 'data-drop': 'main', 'aria-label': 'Main',
+      title: ui.mainHidden ? `Main${needs(home)}: show the main card` : view ? `Main${needs(home)}: your sessions that are on no board`
+        : 'Main: click again to minimise the card (the sidebar and your boards stay)',
+      onclick: () => {
+        if (state.ui.mainHidden || state.ui.panelsHidden) { unhide(); api.board({ op: 'view', id: null }); }
+        else if (!view) api.set({ mainHidden: true }); // you are on it: minimise it
+        else api.board({ op: 'view', id: null });
+      } },
     icon('home'), newsDot(home)), view ? null : '-'),
     (ui.boards || []).filter((b) => b.inside).map(tab),
     h('button', { class: 'rbtn rtab add', 'data-drop': 'new', 'aria-label': 'New board',
@@ -1002,7 +1021,7 @@ function renderShell(cards, ui) {
   }
   const side = ui.rail || 'left';
   const dside = ui.drawerSide || 'right';
-  const bare = !!ui.panelsHidden; // only the sidebar
+  const bare = !!ui.panelsHidden || !!ui.mainHidden; // only the sidebar
   shell.className = `shell side-${side} dside-${dside}${ui.dock ? ' docked' : ui.collapsed ? ' minimised' : ''}${ui.drawer && !bare ? ' open' : ''}${bare ? ' bare' : ''}`;
   document.body.classList.toggle('docked', !!ui.dock);
   shell.style.setProperty('--deckw', `${ui.width || 368}px`);
@@ -1345,6 +1364,11 @@ function detectTransitions(cards) {
 
 api.onDropzone((on) => document.getElementById('panel').classList.toggle('dropzone', on));
 api.onFx((what) => {
+  if (what.startsWith('details:')) { // from Windows' own session menu in a small dock
+    const c = (state.cards || []).find((x) => x.key === what.slice(8));
+    if (c) clickDockPet(c);
+    return;
+  }
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const p = document.getElementById('panel');
   if (what === 'vanish') { // emptied: the board shrinks away

@@ -142,16 +142,24 @@ function snapRaw(a, m, dist) {
   }
   const best = cands.filter((c) => c.d <= dist).sort((p, q) => p.d - q.d)[0];
   if (!best) return null;
-  return { side: best.side, along: best.side === 'left' || best.side === 'right' ? a.y - m.y : a.x - m.x, d: best.d };
+  const across = best.side === 'left' || best.side === 'right';
+  return { side: best.side, along: alignAlong(across, across ? a.y - m.y : a.x - m.x, across ? m.height - a.height : m.width - a.width), d: best.d };
+}
+// Dropped almost in line with an edge of the one it sticks to: it lines up exactly (tops or bottoms beside it,
+// left or right edges above or below it).
+const ALIGN = 16;
+function alignAlong(across, along, far) {
+  if (Math.abs(along) <= ALIGN) return 0;
+  if (Math.abs(along - far) <= ALIGN) return far;
+  return along;
 }
 // The nearest edge among targets [{ id: 'main' | board id, rect }]: { to, side, along } or null.
+// About as near a board as Main (within PREFER px): the board wins, so you stack on it rather than beside Main.
+const PREFER = 10;
 function snapBest(a, targets, dist = 28) {
-  let best = null;
-  for (const t of targets) {
-    const r = snapRaw(a, t.rect, dist);
-    if (r && (!best || r.d < best.d)) best = { to: t.id, side: r.side, along: r.along, d: r.d };
-  }
-  return best && { to: best.to, side: best.side, along: best.along };
+  const hits = targets.map((t) => { const r = snapRaw(a, t.rect, dist); return r && { to: t.id, side: r.side, along: r.along, d: r.d - (t.id === 'main' ? 0 : PREFER) }; })
+    .filter(Boolean).sort((p, q) => p.d - q.d);
+  return hits[0] ? { to: hits[0].to, side: hits[0].side, along: hits[0].along } : null;
 }
 // Boards side by side join into one (their touching edges lose their margin and corners); stacked ones stay
 // separate cards with a small gap. Returns { [board id]: { left, right, top, bottom } } for boards stuck to boards.
@@ -180,11 +188,38 @@ function stuckChain(boards, from) {
   return seen;
 }
 // Where a stuck board goes when Main moves or changes size.
-function stuckPos(m, size, s) {
-  if (s.side === 'right') return { x: m.x + m.width, y: m.y + s.along };
-  if (s.side === 'left') return { x: m.x - size.width, y: m.y + s.along };
-  if (s.side === 'bottom') return { x: m.x + s.along, y: m.y + m.height };
-  return { x: m.x + s.along, y: m.y - size.height };
+// gap: the space between the two (rects here are what you see of each, without the windows' clear margins).
+function stuckPos(m, size, s, gap = 0) {
+  if (s.side === 'right') return { x: m.x + m.width + gap, y: m.y + s.along };
+  if (s.side === 'left') return { x: m.x - size.width - gap, y: m.y + s.along };
+  if (s.side === 'bottom') return { x: m.x + s.along, y: m.y + m.height + gap };
+  return { x: m.x + s.along, y: m.y - size.height - gap };
+}
+// The other sides to try, in order, when its own side would put it off the screen.
+const FALLBACK = { right: ['left', 'bottom', 'top'], left: ['right', 'bottom', 'top'], bottom: ['top', 'right', 'left'], top: ['bottom', 'right', 'left'] };
+const inside = (r, area) => r.x >= area.x && r.y >= area.y && r.x + r.width <= area.x + area.width && r.y + r.height <= area.y + area.height;
+const overlaps = (r, o) => r.x < o.x + o.width && r.x + r.width > o.x && r.y < o.y + o.height && r.y + r.height > o.y;
+// Where a stuck one goes: its own side if that fits on the screen, else the first other side that fits and is free
+// (avoid: what other boards already cover; it keeps its own side for when there is room again), else its own side
+// pulled back onto the screen.
+function placeStuck(m, size, s, gap, area, avoid = []) {
+  const at = (side) => ({ ...stuckPos(m, size, { side, along: side === s.side ? s.along : 0 }, gap), ...size });
+  const free = (r) => inside(r, area) && !avoid.some((o) => overlaps(r, o));
+  const own = at(s.side);
+  if (inside(own, area)) return own;
+  for (const side of FALLBACK[s.side]) { const r = at(side); if (free(r)) return r; }
+  return { ...own, x: Math.max(area.x, Math.min(own.x, area.x + area.width - size.width)), y: Math.max(area.y, Math.min(own.y, area.y + area.height - size.height)) };
+}
+// Something that overlaps m moves just out of its way, by the shortest move that keeps it on the screen.
+function pushOut(a, m, gap, area) {
+  const overlap = a.x < m.x + m.width && a.x + a.width > m.x && a.y < m.y + m.height && a.y + a.height > m.y;
+  if (!overlap) return null;
+  const tries = [
+    { x: m.x + m.width + gap, y: a.y }, { x: m.x - a.width - gap, y: a.y },
+    { x: a.x, y: m.y + m.height + gap }, { x: a.x, y: m.y - a.height - gap },
+  ].map((p) => ({ ...p, width: a.width, height: a.height, d: Math.abs(p.x - a.x) + Math.abs(p.y - a.y) }))
+    .filter((r) => inside(r, area)).sort((p, q) => p.d - q.d);
+  return tries[0] ? { x: tries[0].x, y: tries[0].y } : null;
 }
 
 // "Hide all" remembers what it hid, so "bring them back" shows exactly those again.
@@ -208,4 +243,4 @@ function showAll(cfg) {
 }
 
 module.exports = { BOARD_RE, ICONS, DEFAULT_W, MAX_BOARDS, normalizeBoards, normalizeSessionBoard, place, withContent, moveTo, addBoard, removeBoard,
-  snapTo, snapBest, stuckPos, joins, stuckChain, uniqueName, hideAll, restoreHidden, showAll, cleanName };
+  snapTo, snapBest, stuckPos, placeStuck, pushOut, joins, stuckChain, uniqueName, hideAll, restoreHidden, showAll, cleanName };

@@ -824,9 +824,31 @@ button.mini.pickable:hover { outline: 2px solid color-mix(in srgb, var(--pc) 55%
   100% { opacity: 0; transform: translate(-1px, -11px) rotate(-6deg); }
 }
 
+/* ---------- cursors: one per thing a click does ---------- */
+/* to the chat (a card, a dock pet, a session row): a pointer with a speech bubble */
+.card.canjump, .dpet.canjump, .ghost:not(.nolink), .srow:not(.nolink), .mrow:not(.nolink) { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M3 2.5v16.2l4.1-3.9 2.6 6 2.8-1.2-2.6-5.9h5.8z' fill='%23fff' stroke='%23262630' stroke-width='1.4' stroke-linejoin='round'/%3E%3Cg transform='translate(13 12.5)'%3E%3Cpath d='M2 1h10a2 2 0 0 1 2 2v5.5a2 2 0 0 1-2 2H7.5l-3.2 2.8v-2.8H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2z' fill='%235b8def' stroke='%23262630' stroke-width='1.2' stroke-linejoin='round'/%3E%3Ccircle cx='4' cy='5.8' r='1' fill='%23fff'/%3E%3Ccircle cx='7' cy='5.8' r='1' fill='%23fff'/%3E%3Ccircle cx='10' cy='5.8' r='1' fill='%23fff'/%3E%3C/g%3E%3C/svg%3E") 3 2, pointer; }
+/* details (the arrow on a dock pet, a pet with no chat): a pointer with a little card */
+.dinfo, .dpet:not(.canjump) { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M3 2.5v16.2l4.1-3.9 2.6 6 2.8-1.2-2.6-5.9h5.8z' fill='%23fff' stroke='%23262630' stroke-width='1.4' stroke-linejoin='round'/%3E%3Cg transform='translate(13.5 12)'%3E%3Crect x='0.6' y='0.6' width='12.8' height='13' rx='2.2' fill='%23ffd166' stroke='%23262630' stroke-width='1.2'/%3E%3Cpath d='M3.4 4.6h7.2M3.4 7.4h7.2M3.4 10.2h4.4' stroke='%23262630' stroke-width='1.3' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E") 3 2, pointer; }
+/* inside a card: answering and picking are their own thing */
+.card .waitbox, .card .petpop, .card .gmenu { cursor: default; }
+.card textarea, .card input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { cursor: text; }
+
+/* a dock pet's details arrow: shows on hover, nudges upward */
+.dinfo { position: absolute; left: -5px; top: -7px; z-index: 2; width: 18px; height: 18px; border-radius: 9px;
+  display: grid; place-items: center; background: var(--card-hi); color: var(--text); box-shadow: 0 1px 4px var(--shadow), inset 0 0 0 1px var(--line);
+  opacity: 0; transform: translateY(4px) scale(0.7); transition: opacity 0.14s, transform 0.18s cubic-bezier(.3, 1.6, .5, 1), background 0.12s;
+  -webkit-app-region: no-drag; }
+.dinfo svg { width: 12px; height: 12px; }
+.dpet:hover .dinfo, .dpet:focus-visible .dinfo, .dpet.on .dinfo { opacity: 1; transform: none; }
+.dinfo:hover, .dpet.on .dinfo { background: var(--accent); color: var(--accent-ink); box-shadow: 0 1px 4px var(--shadow); }
+.dpet:not(.on) .dinfo:hover svg { animation: dnudge 0.55s ease-in-out infinite alternate; }
+@keyframes dnudge { to { transform: translateY(-2px); } }
+html.carrying .dinfo { display: none; }
+@media (prefers-reduced-motion: reduce) { .dinfo { transition: none; } .dinfo:hover svg { animation: none; } }
+
 /* ---------- carrying (renderer/carry.js): drag a card, a pet or a group to a new spot ---------- */
 /* pets can be picked up: a paw cursor over them, closed while you carry one */
-.pet.pickable, .dpet, .dstack { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='%23fff' stroke='%23262630' stroke-width='1.5'%3E%3Cellipse cx='6.6' cy='12.2' rx='2.3' ry='2.8' transform='rotate(-22 6.6 12.2)'/%3E%3Cellipse cx='10.9' cy='7.8' rx='2.3' ry='2.9' transform='rotate(-8 10.9 7.8)'/%3E%3Cellipse cx='17.1' cy='7.8' rx='2.3' ry='2.9' transform='rotate(8 17.1 7.8)'/%3E%3Cellipse cx='21.4' cy='12.2' rx='2.3' ry='2.8' transform='rotate(22 21.4 12.2)'/%3E%3Cpath d='M14 13.4c3.7 0 6.7 3 6.7 6.1 0 2.4-1.9 3.7-3.8 3.7-1.2 0-1.9-.7-2.9-.7s-1.7.7-2.9.7c-1.9 0-3.8-1.3-3.8-3.7 0-3.1 3-6.1 6.7-6.1z'/%3E%3C/g%3E%3Cellipse cx='14' cy='18.9' rx='2.6' ry='1.7' fill='%23ff9db4'/%3E%3C/svg%3E") 14 14, grab; }
+.pet.pickable, .dstack { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='%23fff' stroke='%23262630' stroke-width='1.5'%3E%3Cellipse cx='6.6' cy='12.2' rx='2.3' ry='2.8' transform='rotate(-22 6.6 12.2)'/%3E%3Cellipse cx='10.9' cy='7.8' rx='2.3' ry='2.9' transform='rotate(-8 10.9 7.8)'/%3E%3Cellipse cx='17.1' cy='7.8' rx='2.3' ry='2.9' transform='rotate(8 17.1 7.8)'/%3E%3Cellipse cx='21.4' cy='12.2' rx='2.3' ry='2.8' transform='rotate(22 21.4 12.2)'/%3E%3Cpath d='M14 13.4c3.7 0 6.7 3 6.7 6.1 0 2.4-1.9 3.7-3.8 3.7-1.2 0-1.9-.7-2.9-.7s-1.7.7-2.9.7c-1.9 0-3.8-1.3-3.8-3.7 0-3.1 3-6.1 6.7-6.1z'/%3E%3C/g%3E%3Cellipse cx='14' cy='18.9' rx='2.6' ry='1.7' fill='%23ff9db4'/%3E%3C/svg%3E") 14 14, grab; }
 html.carrying, html.carrying * { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='%23fff' stroke='%23262630' stroke-width='1.5'%3E%3Cpath d='M14 10.6c4 0 7.2 3.1 7.2 6.6 0 2.7-2.1 4.2-4.2 4.2-1.3 0-2-.7-3-.7s-1.7.7-3 .7c-2.1 0-4.2-1.5-4.2-4.2 0-3.5 3.2-6.6 7.2-6.6z'/%3E%3Cellipse cx='8.6' cy='13.6' rx='2' ry='2.2'/%3E%3Cellipse cx='12' cy='11.6' rx='2' ry='2.2'/%3E%3Cellipse cx='16' cy='11.6' rx='2' ry='2.2'/%3E%3Cellipse cx='19.4' cy='13.6' rx='2' ry='2.2'/%3E%3C/g%3E%3Cellipse cx='14' cy='17.4' rx='2.6' ry='1.6' fill='%23ff9db4'/%3E%3C/svg%3E") 14 14, grabbing !important; user-select: none; }
 html.carrying .dockbar { -webkit-app-region: no-drag; }
 html.carrying .card:hover { background: var(--card); }

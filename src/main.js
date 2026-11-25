@@ -96,6 +96,7 @@ function loadConfig() {
   c.railMin = false; // the sidebar no longer hides; its hide button hides the panels instead (cfg.panelsHidden)
   if (c.dockNamesV !== 2) { c.dockNames = true; c.dockNamesV = 2; } // 0.6.3: the dock shows session names, not project names
   if (!c.panelsHidden || !Array.isArray(c.panelsHidden.boards)) c.panelsHidden = null; // { boards: [ids it hid] }
+  if (typeof c.mainHidden !== 'boolean') c.mainHidden = false; // the main card minimised: just the sidebar (boards stay)
   if (!c.projectNames || typeof c.projectNames !== 'object' || Array.isArray(c.projectNames)) c.projectNames = {};
   for (const [k, v] of Object.entries(c.projectNames)) if (typeof v !== 'string' || !v.trim() || k.length > 400) delete c.projectNames[k];
   if (!PanelSize.SIDES.includes(c.rail)) c.rail = 'left';
@@ -227,7 +228,7 @@ function pushState() {
       if (tourWin && !tourWin.isDestroyed()) tourWin.webContents.send('state', { ui });
       const base = { muted: cfg.muted, collapsed: cfg.collapsed, showIdle: cfg.showIdle, rail: cfg.rail, drawer: cfg.drawer, drawerSide: cfg.drawerSide || cfg.rail, notify: cfg.notify, dock: cfg.dock, startup: INSTALLED ? cfg.startup : null,
         version: app.getVersion(), updates: updates.enabled, debug: cfg.debug, dev: DEV, zoom: cfg.zoom,
-        glass: cfg.glass, settingsAdvanced: cfg.settingsAdvanced, railMin: false, panelsHidden: !!cfg.panelsHidden, dockNames: cfg.dockNames, dockGroupNames: cfg.dockGroupNames, projectNames: cfg.projectNames, width: cfg.width, deckHeight: cfg.collapsed ? null : cfg.maxHeight, groupBy: cfg.groupBy, groups: cfg.groups, folded: cfg.folded, folderOrder: cfg.folderOrder, ordered: cfg.order.length > 0 || cfg.folderOrder.length > 0, emotes: cfg.emotes, miniList: cfg.miniList || miniDragging, fixedHeight: cfg.dock ? false : cfg.collapsed ? miniDragging : cfg.maxHeight != null };
+        glass: cfg.glass, settingsAdvanced: cfg.settingsAdvanced, railMin: false, panelsHidden: !!cfg.panelsHidden, mainHidden: cfg.mainHidden, dockNames: cfg.dockNames, dockGroupNames: cfg.dockGroupNames, projectNames: cfg.projectNames, width: cfg.width, deckHeight: cfg.collapsed ? null : cfg.maxHeight, groupBy: cfg.groupBy, groups: cfg.groups, folded: cfg.folded, folderOrder: cfg.folderOrder, ordered: cfg.order.length > 0 || cfg.folderOrder.length > 0, emotes: cfg.emotes, miniList: cfg.miniList || miniDragging, fixedHeight: cfg.dock ? false : cfg.collapsed ? miniDragging : cfg.maxHeight != null };
       win.webContents.send('state', { ...snap, ui: { ...base, drawerSide: drawerSide(), ...viewUi('main') }, hooks });
       const joined = Boards.joins(cfg.boards);
       for (const bw of boardWins.values()) {
@@ -592,7 +593,7 @@ let dragWatchdog = null;
 let deck = null;
 let off = { x: 0, y: 0 };
 const railSide = () => cfg.rail; // the sidebar is always there: beside the panel, the minimised bar and the pet dock
-const drawerOpen = () => !cfg.panelsHidden && cfg.drawer != null;
+const drawerOpen = () => !cfg.panelsHidden && !cfg.mainHidden && cfg.drawer != null;
 // The Sessions / Settings card sits left or right of the deck (never above or below), on its own side.
 const drawerSide = () => cfg.drawerSide || (cfg.rail === 'left' || cfg.rail === 'right' ? cfg.rail : 'right');
 // A side rail grows with its board buttons (Main's tabs, + and the toggles for board windows).
@@ -619,8 +620,10 @@ function applyDeck(d) {
   off = { x: r.offX, y: r.offY };
   deck = { x: x + r.offX, y: y + r.offY, width: d.width, height: d.height };
   const b = win.getBounds();
+  const grew = r.width > b.width || r.height > b.height || b.x !== x || b.y !== y;
   if (b.x !== x || b.y !== y || b.width !== r.width || b.height !== r.height) win.setBounds({ x, y, width: r.width, height: r.height });
   followMain();
+  if (grew) pushAway(); // the main card came back, or grew: boards in its way move aside
 }
 function extraY() { // what the rail and the card add above and below the deck
   const e = PanelSize.shellExtras(railSide(), drawerOpen(), cfg.railMin, Z(), drawerSide());
@@ -640,7 +643,7 @@ function endDrag() {
 }
 function fitWindow() {
   if (!win || win.isDestroyed() || drag) return;
-  if (cfg.panelsHidden) { railOnly(); return; }
+  if (cfg.panelsHidden || cfg.mainHidden) { railOnly(); return; }
   railOnlyRect = null;
   const wa = screen.getDisplayMatching(win.getBounds()).workArea;
   if (cfg.dock) { // pet dock: as wide as its pets, bottom edge stays put
@@ -674,6 +677,7 @@ function railOnly() {
   railOnlyRect = r;
   const b = win.getBounds();
   if (b.x !== r.x || b.y !== r.y || b.width !== r.width || b.height !== r.height) win.setBounds(r);
+  followMain(); // what is stuck to the sidebar stays with it
 }
 function setPanelsHidden(on) {
   if (on && !cfg.panelsHidden) {
@@ -751,6 +755,7 @@ ipcMain.on('ui:drag', (e, edge, phase, dx, dy) => {
 });
 ipcMain.on('ui:jump', (_e, hostId) => {
   if (typeof hostId === 'string' && HOST_ID_RE.test(hostId)) {
+    if (FAKE) { log('jump', { fake: true }); return; } // dev copy tests: fake sessions have no chat to open
     shell.openExternal(`claude://code/continue?session=${hostId}&source=agentdeck`);
   }
 });
@@ -781,6 +786,7 @@ ipcMain.on('ui:set', (e, patch) => {
   if (pane.kind === 'main') keys.push('collapsed', 'dock'); // a board's own dock is ui:board 'dock'
   for (const k of keys) if (typeof patch?.[k] === 'boolean') cfg[k] = patch[k];
   if (typeof patch?.panelsHidden === 'boolean') setPanelsHidden(patch.panelsHidden);
+  if (typeof patch?.mainHidden === 'boolean' && patch.mainHidden !== cfg.mainHidden) { cfg.mainHidden = patch.mainHidden; log('main card', cfg.mainHidden ? 'minimised' : 'shown'); }
   if ([0, 1, 2, 3].includes(patch?.glass)) cfg.glass = patch.glass;
   if (PanelSize.ZOOMS.includes(patch?.zoom) && patch.zoom !== cfg.zoom) {
     cfg.zoom = patch.zoom;
@@ -913,12 +919,13 @@ ipcMain.on('ui:checkUpdates', () => updates.check());
 if (FAKE) ipcMain.on('test:op', (_e, op) => {
   const bw = op && boardWins.get(op.id);
   if (op && op.op === 'moveBoard' && bw && !bw.win.isDestroyed()) { bw.win.setPosition(Math.round(op.x), Math.round(op.y)); boardMoved(bw); }
+  if (op && op.op === 'moveMain' && win) { applyDeck({ ...deckNow(), x: Math.round(op.x), y: Math.round(op.y) }); const [x, y] = win.getPosition(); cfg.pos = { x: x + off.x, y: y + off.y }; }
   const fc = op && op.op === 'fakeState' && FAKE.find((x) => x.key === op.key);
   if (fc && ['working', 'waiting', 'done', 'error', 'idle'].includes(op.state)) { fc.state = op.state; fc.at = Date.now(); pushState(); }
 });
 
 // Right-click on a session in a window too small for Flocklet's own menu (a dock): the same choices, Windows' menu.
-ipcMain.on('ui:sessionMenu', (e, key) => {
+ipcMain.on('ui:sessionMenu', (e, key, dock) => {
   const w = BrowserWindow.fromWebContents(e.sender);
   const c = (lastCards || []).find((x) => x.key === key);
   if (!w || !c) return;
@@ -928,6 +935,7 @@ ipcMain.on('ui:sessionMenu', (e, key) => {
     { label: c.name, enabled: false },
     { type: 'separator' },
     c.canJump && { label: 'Open in Claude', click: send('ui:jump', c.hostId) },
+    dock === true && { label: 'Details', click: () => { if (!e.sender.isDestroyed()) e.sender.send('fx', `details:${c.key}`); } },
     { label: c.pinned ? 'Unpin' : 'Pin: keep this card', click: send('ui:pin', c.key, !c.pinned) },
     c.group === 'active' && !c.pinned && { label: 'Hide this card', click: send('ui:hideCard', c.id) },
     { label: c.quiet ? 'Turn notifications on' : 'Mute notifications', click: send('ui:quiet', c.key, !c.quiet) },
@@ -1039,11 +1047,45 @@ function openBoard(b) {
 }
 // Put a board where it belongs: next to Main if it is stuck, else where you left it (kept on screen).
 // The window a board is stuck to: Main's, or another board's (while it shows).
+// What you see of a window: without its clear margins (8 px; 16 below, room for the shadow). A board's joined
+// edges have none (3 px when stacked). The magnet places what you see: 6 px apart, like the sidebar and the panel;
+// boards joined side by side touch.
+const MAGNET_GAP = 6;
+function insetsOf(id) {
+  const m = (v) => Math.round(v * Z());
+  if (id === 'main') return { l: m(8), t: m(8), r: m(8), b: m(16) };
+  const j = Boards.joins(cfg.boards)[id] || {};
+  return { l: j.left ? 0 : m(8), r: j.right ? 0 : m(8), t: j.top ? m(3) : m(8), b: j.bottom ? m(3) : m(16) };
+}
+const shown = (r, i) => ({ x: r.x + i.l, y: r.y + i.t, width: r.width - i.l - i.r, height: r.height - i.t - i.b });
 function stuckTarget(b) {
   if (!b.stuck) return null;
-  if (b.stuck.to === 'main') return mainShown() ? win.getBounds() : null;
+  if (b.stuck.to === 'main') return mainShown() ? { rect: shown(win.getBounds(), insetsOf('main')), board: false } : null;
   const t = boardWins.get(b.stuck.to);
-  return t && !t.win.isDestroyed() && t.win.isVisible() ? t.win.getBounds() : null;
+  return t && !t.win.isDestroyed() && t.win.isVisible() ? { rect: shown(t.win.getBounds(), insetsOf(b.stuck.to)), board: true } : null;
+}
+function snapToMain(rect, id) {
+  if (!mainShown()) return null;
+  const s = Boards.snapTo(shown(rect, insetsOf(id)), shown(win.getBounds(), insetsOf('main')), px(28));
+  return s ? { to: 'main', ...s } : null;
+}
+// Main's card came back (or grew) where a free board sits: the board moves just out of its way, on the screen.
+function pushAway() {
+  if (!mainShown()) return;
+  const m = shown(win.getBounds(), insetsOf('main'));
+  for (const bw of boardWins.values()) {
+    const b = boardById(bw.id);
+    if (!b || b.stuck || bw.win.isDestroyed() || !bw.win.isVisible()) continue;
+    const r = bw.win.getBounds();
+    const ins = insetsOf(b.id);
+    const to = Boards.pushOut(shown(r, ins), m, px(MAGNET_GAP), screen.getDisplayMatching(r).workArea);
+    if (!to) continue;
+    bw.placing = true;
+    bw.win.setBounds({ ...r, x: to.x - ins.l, y: to.y - ins.t });
+    bw.placing = false;
+    b.pos = { x: to.x - ins.l, y: to.y - ins.t };
+    follow(b.id);
+  }
 }
 function boardWidth(bw, b) { return b.dock ? Math.max(px(120), bw.dockWidth || px(240)) : px(b.width); }
 function placeBoard(bw, height = null, depth = 0) {
@@ -1053,8 +1095,15 @@ function placeBoard(bw, height = null, depth = 0) {
   const size = { width: boardWidth(bw, b), height: height || cur.height };
   let r = { x: cur.x, y: cur.y, ...size };
   const t = stuckTarget(b);
-  if (t) r = { ...r, ...Boards.stuckPos(t, size, b.stuck) };
-  else r = onScreen(r);
+  if (t) {
+    const ins = insetsOf(b.id);
+    const sideJoin = t.board && (b.stuck.side === 'left' || b.stuck.side === 'right');
+    const vis = { width: size.width - ins.l - ins.r, height: size.height - ins.t - ins.b };
+    const avoid = [...boardWins.values()].filter((o) => o.id !== b.id && !o.win.isDestroyed() && o.win.isVisible()
+      && !Boards.stuckChain(cfg.boards, o.id).has(b.id)).map((o) => shown(o.win.getBounds(), insetsOf(o.id))); // not what hangs on it
+    const v = Boards.placeStuck(t.rect, vis, b.stuck, sideJoin ? 0 : px(MAGNET_GAP), screen.getDisplayMatching(t.rect).workArea, avoid);
+    r = { ...r, x: v.x - ins.l, y: v.y - ins.t };
+  } else r = onScreen(r);
   b.pos = { x: r.x, y: r.y };
   if (cur.x !== r.x || cur.y !== r.y || cur.width !== r.width || cur.height !== r.height) {
     bw.placing = true;
@@ -1076,19 +1125,20 @@ function boardMoved(bw) {
   if (!b || bw.placing || bw.win.isDestroyed()) return;
   const r = bw.win.getBounds();
   const mid = { x: r.x + r.width / 2, y: r.y + px(20) }; // where you held it: its header
-  if (mainShown() && contains(visibleRect(win), mid)) {
+  if (mainShown() && !cfg.mainHidden && contains(visibleRect(win), mid)) { // (onto the bare sidebar it stacks)
     if (!bw.win.isDestroyed()) bw.win.webContents.send('fx', 'into-main'); // the board folds away, then goes in
     setTimeout(() => boardOp({ op: 'inside', id: b.id }), 280); // (the page skips the animation under reduce motion)
     return;
   }
   const chain = new Set([b.id, ...[...cfg.boards].filter((x) => Boards.stuckChain(cfg.boards, x.id).has(b.id)).map((x) => x.id)]);
   const targets = [];
-  if (mainShown()) targets.push({ id: 'main', rect: win.getBounds() });
+  if (mainShown()) targets.push({ id: 'main', rect: shown(win.getBounds(), insetsOf('main')) });
   for (const o of boardWins.values()) {
     if (chain.has(o.id) || o.win.isDestroyed() || !o.win.isVisible()) continue;
-    targets.push({ id: o.id, rect: o.win.getBounds() });
+    targets.push({ id: o.id, rect: shown(o.win.getBounds(), insetsOf(o.id)) });
   }
-  b.stuck = Boards.snapBest(r, targets, px(28));
+  b.stuck = null; // (its own margins as a free board)
+  b.stuck = Boards.snapBest(shown(r, insetsOf(b.id)), targets, px(28));
   const onto = b.stuck && b.stuck.to !== 'main' && (b.stuck.side === 'left' || b.stuck.side === 'right') ? boardById(b.stuck.to) : null;
   if (onto && onto.dock !== b.dock) b.dock = onto.dock; // joined side by side: same type as the one it lands on
   if (b.stuck) placeBoard(bw); else { b.pos = { x: r.x, y: r.y }; follow(b.id); }
@@ -1222,8 +1272,7 @@ function placeBoardAt(b, p, target) {
   b.inside = false;
   b.visible = true;
   b.pos = { x: p.x - px(70), y: p.y - px(22) };
-  b.stuck = mainShown() ? Boards.snapTo({ ...b.pos, ...size }, win.getBounds(), px(28)) : null;
-  if (b.stuck) b.stuck = { to: 'main', ...b.stuck };
+  b.stuck = snapToMain({ ...b.pos, ...size }, b.id);
   const bw = boardWins.get(b.id);
   if (bw && !bw.win.isDestroyed()) { bw.placing = true; bw.win.setPosition(b.pos.x, b.pos.y); bw.placing = false; }
 }
@@ -1349,8 +1398,7 @@ function carryDrop(items, p, from = null) {
     b.fresh = /^Board \d+$/.test(b.name);
     dropEmptied(before);
     const size = { width: px(b.width), height: px(160) };
-    b.stuck = mainShown() ? Boards.snapTo({ ...b.pos, ...size }, win.getBounds(), px(28)) : null;
-    if (b.stuck) b.stuck = { to: 'main', ...b.stuck };
+    b.stuck = snapToMain({ ...b.pos, ...size }, b.id);
     log('board', { made: id, from: items.project != null ? 'project' : items.group != null ? 'group' : `${items.keys.length} sessions` });
   } else {
     Boards.moveTo(cfg, items, t.board);

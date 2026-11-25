@@ -23,7 +23,7 @@ contextBridge.exposeInMainWorld('agentdeck', {
   order: (op) => ipcRenderer.send('ui:order', op),
   board: (op) => ipcRenderer.send('ui:board', op),
   projectName: (key, name) => ipcRenderer.send('ui:projectName', String(key), String(name || '')),
-  sessionMenu: (key) => ipcRenderer.send('ui:sessionMenu', String(key)),
+  sessionMenu: (key, dock) => ipcRenderer.send('ui:sessionMenu', String(key), !!dock),
   test: (op) => ipcRenderer.send('test:op', op), // dev copy tests only; ignored otherwise
   onFx: (cb) => ipcRenderer.on('fx', (_e, what) => cb(String(what))),
   boardMenu: (id) => ipcRenderer.send('ui:boardMenu', id == null ? null : String(id)),
