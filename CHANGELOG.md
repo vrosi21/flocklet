@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.5
+
+- News on sidebar tabs and window toggles for boards you are not looking at (`news()`): amber = waiting, red =
+  stopped, green with a count = finished since you last looked (`lookedAt`, set for what is in front of you: Main's
+  card view and visible board windows). The tab or toggle the chime came from pulses (`pings`, 2.7 s); a visible
+  board window pulses its own panel (`panelPing`).
+- Fix: every window ran `detectTransitions` and chimed; only Main chimes now.
+- The pet dock keeps the sidebar (and the side card): `railSide()` is always the rail; tabs switch what the dock
+  shows. A side sidebar's window is at least as tall as the measured sidebar.
+- Fix: a sidebar above / below wider than a narrow deck made the grid widen every column and push the deck off
+  the window. The rail no longer takes width in the grid (`min-width: 0`), the last column takes any extra
+  (`minmax(0, 1fr)`), and main makes the window at least as wide as the sidebar's buttons.
+- Updates: the installer always shows (`quitAndInstall(false, true)`); silent installs failed soon after boot
+  (2026-11-23, 2026-11-25) and Flocklet just looked gone.
+- Dev copy tests: `test:op` `fakeState` changes a fake session's state.
+
 ## 0.6.4
 
 - A board emptied by a move (`ui:board` move / new, a drop on a board or Main) is removed: `Boards.withContent`

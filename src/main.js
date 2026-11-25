@@ -205,7 +205,7 @@ function pushState() {
     pushTimer = null;
     if (!store) return;
     const snap = store.snapshot();
-    if (Array.isArray(FAKE)) snap.cards = FAKE.map((c) => ({ ...c, since: Date.now() - (c.ago || 60) * 1e3, lastActivityAt: Date.now() - (c.ago || 60) * 1e3 }));
+    if (Array.isArray(FAKE)) snap.cards = FAKE.map((c) => ({ ...c, since: c.at || Date.now() - (c.ago || 60) * 1e3, lastActivityAt: c.at || Date.now() - (c.ago || 60) * 1e3 }));
     snap.cards = Boards.place(Grouping.applyOrder(Grouping.decorate(snap.cards, cfg), cfg.order), cfg);
     lastCards = snap.cards;
     snap.counts = Grouping.count(snap.cards);
@@ -591,12 +591,13 @@ let dragWatchdog = null;
 // `off` is where it sits inside the window (the rail and drawer open outward, so the deck stays still).
 let deck = null;
 let off = { x: 0, y: 0 };
-const railSide = () => (cfg.dock ? null : cfg.rail); // the rail stays when minimised (compact), not in the pet dock
-const drawerOpen = () => !cfg.dock && !cfg.panelsHidden && cfg.drawer != null;
+const railSide = () => cfg.rail; // the sidebar is always there: beside the panel, the minimised bar and the pet dock
+const drawerOpen = () => !cfg.panelsHidden && cfg.drawer != null;
 // The Sessions / Settings card sits left or right of the deck (never above or below), on its own side.
 const drawerSide = () => cfg.drawerSide || (cfg.rail === 'left' || cfg.rail === 'right' ? cfg.rail : 'right');
 // A side rail grows with its board buttons (Main's tabs, + and the toggles for board windows).
-const railMinH = () => PanelSize.RAIL_MIN_H + 34 * (cfg.boards.length + 2) + (cfg.boards.some((b) => !b.inside) ? 40 : 0);
+// A side sidebar needs its own length (measured by the page, + the shell's margins), even beside a short dock.
+const railMinH = () => Math.max(PanelSize.RAIL_MIN_H, Math.round(railLength) + 24);
 let dockWidth = 200; // pet dock: the overlay measures its row
 let dockAnchored = false; // the dock keeps its bottom edge still when a card pops up above it
 // Minimised list snaps between two stops: stats only, or every deck session (no scroll bar).
@@ -611,6 +612,8 @@ function deckNow() {
 function applyDeck(d) {
   const wa = screen.getDisplayMatching(win.getBounds()).workArea;
   const r = PanelSize.shellRect(d, railSide(), drawerOpen(), cfg.railMin, Z(), drawerSide(), railMinH());
+  // A sidebar above or below needs room for all its buttons: the window grows to the right (the deck stays put).
+  if (cfg.rail === 'top' || cfg.rail === 'bottom') r.width = Math.max(r.width, px(Math.round(railLength) + 16));
   const x = Math.max(wa.x, Math.min(r.x, wa.x + wa.width - r.width));
   const y = Math.max(wa.y, Math.min(r.y, wa.y + wa.height - r.height));
   off = { x: r.offX, y: r.offY };
@@ -637,7 +640,7 @@ function endDrag() {
 }
 function fitWindow() {
   if (!win || win.isDestroyed() || drag) return;
-  if (cfg.panelsHidden && !cfg.dock) { railOnly(); return; }
+  if (cfg.panelsHidden) { railOnly(); return; }
   railOnlyRect = null;
   const wa = screen.getDisplayMatching(win.getBounds()).workArea;
   if (cfg.dock) { // pet dock: as wide as its pets, bottom edge stays put
@@ -910,6 +913,8 @@ ipcMain.on('ui:checkUpdates', () => updates.check());
 if (FAKE) ipcMain.on('test:op', (_e, op) => {
   const bw = op && boardWins.get(op.id);
   if (op && op.op === 'moveBoard' && bw && !bw.win.isDestroyed()) { bw.win.setPosition(Math.round(op.x), Math.round(op.y)); boardMoved(bw); }
+  const fc = op && op.op === 'fakeState' && FAKE.find((x) => x.key === op.key);
+  if (fc && ['working', 'waiting', 'done', 'error', 'idle'].includes(op.state)) { fc.state = op.state; fc.at = Date.now(); pushState(); }
 });
 
 // Right-click on a session in a window too small for Flocklet's own menu (a dock): the same choices, Windows' menu.

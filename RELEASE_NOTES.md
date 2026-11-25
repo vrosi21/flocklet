@@ -1,1 +1,5 @@
-- **Empty boards go away.** When you move the last sessions off a board (onto another board or the main panel), that board disappears: a board window shrinks away, a tab is removed. The main panel never does, and a new empty board you just made with + stays until you use it.
+- **See where it happened.** A tab or board button in the sidebar now shows a dot when something happens on a board you are not looking at: green with a count when sessions finished, amber when one needs you, red when one stopped. When the chime plays, the tab it came from pulses, and a board window you can see pulses itself. Opening the board clears its dot.
+- **The pet dock keeps the sidebar**, so you can switch tabs while docked; every tab on the main card then shows as a dock.
+- **Fix:** with the sidebar above or below, a narrow panel was pushed off the window's edge. The window now always makes room for the sidebar.
+- **Fix:** with board windows open, the chime played once per window. It now plays once.
+- **Updates show the installer.** After "Restart now" you see a small progress window, so Flocklet no longer just disappears when a quiet install fails.

@@ -770,23 +770,55 @@ function boardSquare(b) {
   sq.style.setProperty('--s-acc', pal.swatch.accent);
   return sq;
 }
-const waitingOn = (cards, id) => cards.filter((c) => (c.board || null) === id && c.group === 'active' && c.state === 'waiting').length;
-const needs = (n) => (n ? ` · ${n} need${n > 1 ? '' : 's'} you` : '');
+// ---------- where something happened: a board you are not looking at says so on its tab or toggle ----------
+// amber = needs you, red = stopped, green = finished since you last looked (with a count). When the chime plays,
+// the tab or toggle it came from pulses; a board window shows it on its own panel.
+const lookedAt = new Map(); // board id ('main' for Main) -> when you last had it in front of you
+const pings = new Map(); // board id ('main') -> { at, kind } of the last sound from it
+const bid = (id) => id || 'main';
+function news(cards, id) {
+  const mine = cards.filter((c) => (c.board || null) === id && c.group === 'active');
+  const since = lookedAt.get(bid(id)) || EPOCH;
+  return {
+    waiting: mine.filter((c) => c.state === 'waiting').length,
+    error: mine.filter((c) => c.state === 'error' && !c.limited && (c.since || 0) > since).length,
+    done: mine.filter((c) => c.state === 'done' && (c.since || 0) > since).length,
+  };
+}
+function newsDot(n) {
+  if (n.waiting) return h('span', { class: 'rdot' });
+  if (n.error) return h('span', { class: 'rdot err' });
+  if (n.done) return h('span', { class: 'rdot done' }, n.done > 1 ? String(n.done) : '');
+  return null;
+}
+const needs = (n) => {
+  const w = [n.waiting && `${n.waiting} need${n.waiting > 1 ? '' : 's'} you`, n.error && `${n.error} stopped`, n.done && `${n.done} finished`].filter(Boolean);
+  return w.length ? ` · ${w.join(', ')}` : '';
+};
+const quiet = { waiting: 0, error: 0, done: 0 };
+// The pulse on a tab or toggle: its class and how far in it is (so a re-render does not restart it).
+function pingOn(el, id) {
+  const p = pings.get(bid(id));
+  if (!p || Date.now() - p.at > 2700) return el;
+  el.classList.add('ping', p.kind);
+  el.style.setProperty('--pa', `-${Date.now() - p.at}ms`);
+  return el;
+}
 // Main's card shows one board at a time: Main itself, or a board that lives on it. Drop a session on a tab to move it.
 function railTabs(ui, cards) {
   const view = ui.boardView || null;
-  const home = waitingOn(cards, null);
+  const home = view ? news(cards, null) : quiet;
   const tab = (b) => {
-    const n = waitingOn(cards, b.id);
-    return h('button', { class: `rbtn rtab${view === b.id ? ' on' : ''}`, 'data-drop': `board:${b.id}`, 'data-board': b.id, 'aria-label': b.name,
+    const n = view === b.id ? quiet : news(cards, b.id);
+    return pingOn(h('button', { class: `rbtn rtab${view === b.id ? ' on' : ''}`, 'data-drop': `board:${b.id}`, 'data-board': b.id, 'aria-label': b.name,
       title: `${b.name}${needs(n)}: show it on the main card · drag it out of Flocklet for its own window · right-click for more`,
       onclick: () => { unhide(); api.board({ op: 'view', id: b.id }); }, oncontextmenu: (e) => { e.preventDefault(); api.boardMenu(b.id); } },
-    boardSquare(b), n > 0 && h('span', { class: 'rdot' }));
+    boardSquare(b), newsDot(n)), view === b.id ? '-' : b.id);
   };
   return h('div', { class: 'rsec rtabs', title: '' },
-    h('button', { class: `rbtn rtab home${view ? '' : ' on'}`, 'data-drop': 'main', 'aria-label': 'Main',
+    pingOn(h('button', { class: `rbtn rtab home${view ? '' : ' on'}`, 'data-drop': 'main', 'aria-label': 'Main',
       title: `Main${needs(home)}: your sessions that are on no board`, onclick: () => { unhide(); api.board({ op: 'view', id: null }); } },
-    icon('home'), home > 0 && view && h('span', { class: 'rdot' })),
+    icon('home'), newsDot(home)), view ? null : '-'),
     (ui.boards || []).filter((b) => b.inside).map(tab),
     h('button', { class: 'rbtn rtab add', 'data-drop': 'new', 'aria-label': 'New board',
       title: 'New board on the main card (or drop a session or group here)', onclick: () => { unhide(); api.board({ op: 'new' }); } }, icon('plus')));
@@ -795,13 +827,13 @@ function railTabs(ui, cards) {
 function railWindows(ui, cards) {
   const outside = (ui.boards || []).filter((b) => !b.inside);
   const toggle = (b) => {
-    const n = waitingOn(cards, b.id);
-    return h('button', { class: `rbtn rtoggle${b.visible ? ' on' : ''}`, 'data-drop': `board:${b.id}`, 'data-board': b.id, 'aria-label': b.name,
+    const n = b.visible ? quiet : news(cards, b.id); // a window you can see tells you itself
+    return pingOn(h('button', { class: `rbtn rtoggle${b.visible ? ' on' : ''}`, 'data-drop': `board:${b.id}`, 'data-board': b.id, 'aria-label': b.name,
       'aria-pressed': b.visible ? 'true' : 'false',
       title: `${b.name}${needs(n)}: ${b.visible ? 'hide' : 'show'} its window · drag it onto the tabs to put it on the main card · right-click for more`,
       onclick: () => { if (state.ui.panelsHidden) { unhide(); return; } api.board({ op: 'toggle', id: b.id }); },
       oncontextmenu: (e) => { e.preventDefault(); api.boardMenu(b.id); } },
-    boardSquare(b), h('span', { class: 'rwin' }), n > 0 && h('span', { class: 'rdot' }));
+    boardSquare(b), h('span', { class: 'rwin' }), newsDot(n)), b.visible ? '-' : b.id);
   };
   return h('div', { class: `rsec rwins${outside.length ? '' : ' empty'}` },
     outside.map(toggle),
@@ -970,8 +1002,8 @@ function renderShell(cards, ui) {
   }
   const side = ui.rail || 'left';
   const dside = ui.drawerSide || 'right';
-  const bare = !!ui.panelsHidden && !ui.dock; // only the sidebar
-  shell.className = `shell side-${side} dside-${dside}${ui.dock ? ' docked' : ui.collapsed ? ' minimised' : ''}${ui.drawer && !ui.dock && !bare ? ' open' : ''}${bare ? ' bare' : ''}`;
+  const bare = !!ui.panelsHidden; // only the sidebar
+  shell.className = `shell side-${side} dside-${dside}${ui.dock ? ' docked' : ui.collapsed ? ' minimised' : ''}${ui.drawer && !bare ? ' open' : ''}${bare ? ' bare' : ''}`;
   document.body.classList.toggle('docked', !!ui.dock);
   shell.style.setProperty('--deckw', `${ui.width || 368}px`);
   if (ui.deckHeight != null) shell.style.setProperty('--deckh', `${ui.deckHeight - 24}px`); else shell.style.removeProperty('--deckh');
@@ -993,7 +1025,7 @@ function renderShell(cards, ui) {
   ].filter(Boolean));
   popRail(rail);
   const drawer = document.getElementById('drawer');
-  drawer.hidden = !ui.drawer || !!ui.dock || bare; // opens while minimised too, not in the pet dock
+  drawer.hidden = !ui.drawer || bare; // opens beside the panel, the minimised bar and the pet dock alike
   if (drawer.hidden) drawer.replaceChildren();
   else drawer.replaceChildren(...drawerCard(cards, ui));
 }
@@ -1065,6 +1097,11 @@ function render() {
   const { cards, ui, hooks } = state;
   const deck = onDeck(cards);
   const panel = document.getElementById('panel');
+  if (VIEW === 'main') { // what is in front of you counts as seen: Main's card, and board windows that show
+    const now = Date.now();
+    if (!ui.panelsHidden && !ui.collapsed && !ui.dock) lookedAt.set(bid(myBoard()), now);
+    for (const b of ui.boards || []) if (!b.inside && b.visible) lookedAt.set(b.id, now);
+  }
   if (ui.board && ui.board.fresh && !renaming && (VIEW === 'board' || ui.boardView === ui.board.id)) { // just made: name it
     renaming = true;
     focusAfterRender = 'bname';
@@ -1075,7 +1112,9 @@ function render() {
   applyTheme(ui);
   let kids;
   {
-    panel.className = `panel${ui.dock ? ' dock' : ui.collapsed ? ' collapsed' : ''}${ui.fixedHeight ? ' fixed' : ''}`;
+    const pinged = panelPing && Date.now() - panelPing.at < 2700 ? ` pinged ${panelPing.kind}` : '';
+    panel.className = `panel${ui.dock ? ' dock' : ui.collapsed ? ' collapsed' : ''}${ui.fixedHeight ? ' fixed' : ''}${pinged}`;
+    if (pinged) panel.style.setProperty('--pa', `-${Date.now() - panelPing.at}ms`);
     kids = ui.dock ? dockView(deck, ui).filter(Boolean) : [VIEW === 'board' ? boardHeader(state, deck) : header(state, deck)];
     if (VIEW === 'board' && boardStyleOpen) kids.push(boardStyle(ui));
     if (ui.dock) { /* pet dock: nothing else */ } else if (ui.collapsed) kids.push(miniBar(cards));
@@ -1280,18 +1319,28 @@ function chime(kind) {
   } catch { /* no audio device */ }
 }
 
+let panelPing = null; // a board window: { at, kind } of the last news on this board
 function detectTransitions(cards) {
   let sound = null;
+  const from = new Map(); // board id ('main') -> what happened there
   for (const c of cards) {
     const before = prevStates.get(c.id);
     if (!firstRender && before !== c.state) {
-      if (c.state === 'waiting') sound = 'attention';
-      else if ((c.state === 'done' || c.state === 'error') && (before === 'working' || before === 'waiting')) sound = sound || 'done';
+      let kind = null;
+      if (c.state === 'waiting') { sound = 'attention'; kind = 'waiting'; }
+      else if ((c.state === 'done' || c.state === 'error') && (before === 'working' || before === 'waiting')) {
+        sound = sound || 'done';
+        kind = c.state === 'error' ? 'error' : 'done';
+      }
+      if (kind && c.group === 'active' && !(from.get(bid(c.board)) === 'waiting')) from.set(bid(c.board), kind);
     }
     prevStates.set(c.id, c.state);
   }
   firstRender = false;
-  if (sound) chime(sound);
+  const now = Date.now();
+  for (const [id, kind] of from) pings.set(id, { at: now, kind });
+  if (VIEW === 'board' && from.has(BOARD_ID)) panelPing = { at: now, kind: from.get(BOARD_ID) };
+  if (sound && VIEW === 'main') chime(sound); // one chime: board windows see the same news and stay quiet
 }
 
 api.onDropzone((on) => document.getElementById('panel').classList.toggle('dropzone', on));

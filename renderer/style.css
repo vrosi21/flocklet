@@ -560,7 +560,7 @@ button.mini.pickable:hover { outline: 2px solid color-mix(in srgb, var(--pc) 55%
    side (dside-*), beyond the rail when they share a side. */
 .shell {
   position: fixed; inset: 0; padding: 8px 8px 16px; box-sizing: border-box;
-  display: grid; grid-template-columns: repeat(5, auto); grid-template-rows: auto auto minmax(0, 1fr) auto auto; justify-content: start;
+  display: grid; grid-template-columns: auto auto auto auto minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto auto; justify-content: start;
 }
 .shell > .panel { grid-area: 3 / 3; align-self: start; min-width: 0; width: calc(var(--deckw) - 16px); max-height: 100%; }
 .shell > .panel.fixed { height: min(var(--deckh, 100%), 100%); }
@@ -700,7 +700,7 @@ button.mini.pickable:hover { outline: 2px solid color-mix(in srgb, var(--pc) 55%
 .mrow .rowact.on { opacity: 0.8; color: var(--accent); }
 
 /* ---------- pet dock (a taskbar of pets) ---------- */
-.shell.docked > .rail, .shell.docked > .drawer { display: none; }
+/* the pet dock keeps its sidebar (and the Sessions / Settings card) */
 .shell.docked > .panel { width: auto; flex: 1 1 auto; }
 .docked .rz { display: none; }
 .panel.dock { border-radius: calc(var(--radius-panel) + 4px); }
@@ -1006,3 +1006,28 @@ html.from-tabs .rwins .rslot { display: block; }
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--line); animation: tipin 0.12s ease-out;
 }
 @keyframes tipin { from { opacity: 0; transform: translateY(-2px); } }
+
+/* ---------- 0.6.5: news on tabs and toggles; the pulse where the chime came from ---------- */
+/* amber = needs you, red = stopped, green = finished since you last looked (a count when more than one) */
+.rdot.err { background: var(--err); }
+.rdot.done { background: var(--ok); }
+.rdot:not(:empty) {
+  width: auto; min-width: 13px; height: 13px; padding: 0 3px; right: -2px; top: -2px; border-radius: 7px; box-sizing: border-box;
+  font: 800 8.5px/13px var(--font-body); text-align: center; color: var(--accent-ink);
+}
+.rbtn.ping, .panel.pinged { --ping: var(--ok); }
+.rbtn.ping.waiting, .panel.pinged.waiting { --ping: var(--warn); }
+.rbtn.ping.error, .panel.pinged.error { --ping: var(--err); }
+.rbtn.ping::after, .panel.pinged::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 3;
+  animation: ping 0.9s ease-out var(--pa, 0s) 3;
+}
+@keyframes ping {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ping) 80%, transparent), inset 0 0 0 2px var(--ping); }
+  to { box-shadow: 0 0 0 11px transparent, inset 0 0 0 2px transparent; }
+}
+
+/* a sidebar above or below never pushes the panel: it takes no width of its own (main makes the window wide enough
+   for its buttons; any extra width goes to the right of everything) */
+.shell.side-top > .rail, .shell.side-bottom > .rail { min-width: 0; overflow: hidden; }
+.rail > * { flex-shrink: 0; }

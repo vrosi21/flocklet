@@ -98,11 +98,13 @@ function initUpdates({ app, dialog, log, getWindow = () => null, notify = () => 
   const last = lastInstall({ tried: memo.get(), running: app.getVersion() });
   if (last.failed) log('update did not install', { tried: memo.get(), running: app.getVersion() });
   if (last.clear) memo.set(null);
+  // The installer always shows its progress window: a silent install failed twice soon after Windows started
+  // (2026-11-23, 2026-11-25) and Flocklet just looked gone until reopened. Visible, you see it work (or why not).
   const install = () => {
     if (ready) memo.set(ready);
-    log('update install', { version: ready, visible: last.failed });
+    log('update install', { version: ready, visible: true, retry: last.failed });
     if (debug() && logFile) watchInstaller(logFile, log);
-    setImmediate(() => autoUpdater.quitAndInstall(!last.failed, true));
+    setImmediate(() => autoUpdater.quitAndInstall(false, true));
   };
   const ask = (opts) => {
     const w = getWindow();
